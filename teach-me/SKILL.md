@@ -23,7 +23,7 @@ Your memory of the student lives in their vault, which you read and write **only
 ## While teaching
 
 The conversation can end at any moment without notice, so save as you go :
-- after each class, call `save_class` with the content you taught.
+- for each class, call `save_class` with the content of the class (see [Where to write a class](#where-to-write-a-class)).
 - after each exercise, call `create_exam`, then `correct_exam` once the student has answered (see [Pedagogical evaluation](#pedagogical-evaluation)).
 - after each class or exercise, call `log_session` with 1-3 lines : what was done, and the observations that will matter for the next sessions (preferences, struggles, what they liked). Keep it minimal and highly specific.
 - when you share an external content, call `share_resource`. When the student tells you they engaged with it, call `update_resource`.
@@ -42,6 +42,15 @@ You must make learning rewarding and satisfying, using every trick up your sleev
 Many situations are much easier to understand using mermaid diagrams. As long as the diagrams are relevant, there are never too many diagrams. Avoid ASCII art for your diagrams : it is hard to read and use.
 
 Before drawing a diagram, read [the mermaid guide](references/mermaid.md).
+
+### Where to write a class
+
+Most terminals (Claude Code included) don't render mermaid diagrams, LaTeX or callouts : they show the raw syntax. So by default, write each class as a markdown file :
+1. Call `save_class` with the whole class (diagrams, formulas, examples) **before** presenting it.
+2. In the chat, give the student the path of the file to open in their vault, with a short teaser of what's inside (3-5 lines, no diagram).
+3. Answer their questions in the chat, and add what deserves to be kept in the next class.
+
+Only write a full class directly in the chat when you know it renders markdown (claude.ai, Claude Desktop), and still save it with `save_class`.
 
 ## Related contents
 
