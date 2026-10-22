@@ -4,7 +4,7 @@ import asyncio
 
 from fastmcp import Client
 
-from server import mcp
+from teach_me.server import mcp
 from teach_me.tools import ALL_TOOLS
 
 

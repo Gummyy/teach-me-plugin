@@ -40,7 +40,7 @@ def vault_path() -> Path:
             f"The {VAULT_ENV} environment variable is not set. "
             "Ask the user to set it to the folder of their vault in the configuration of the MCP server."
         )
-    path = Path(raw).expanduser()
+    path = Path(raw).expanduser().resolve()  # a relative path is relative to the working directory
     path.mkdir(parents=True, exist_ok=True)
     return path
 

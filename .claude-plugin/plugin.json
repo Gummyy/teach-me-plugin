@@ -1,0 +1,31 @@
+{
+  "name": "teach-me",
+  "displayName": "teach-me",
+  "description": "A teacher that remembers you : classes, quizzes, project exercises and a report card, kept in your own Obsidian vault.",
+  "author": {
+    "name": "Gummyy",
+    "url": "https://github.com/Gummyy"
+  },
+  "homepage": "https://github.com/Gummyy/teach-me-plugin",
+  "repository": "https://github.com/Gummyy/teach-me-plugin",
+  "keywords": ["education", "learning", "obsidian", "mcp"],
+  "skills": ["./teach-me"],
+  "mcpServers": {
+    "teach-me": {
+      "command": "uv",
+      "args": ["run", "--quiet", "--project", "${CLAUDE_PLUGIN_ROOT}/teach-me-mcp", "teach-me-mcp"],
+      "env": {
+        "TEACH_ME_VAULT": "${user_config.vault_path}",
+        "UV_PROJECT_ENVIRONMENT": "${CLAUDE_PLUGIN_DATA}/venv"
+      }
+    }
+  },
+  "userConfig": {
+    "vault_path": {
+      "type": "directory",
+      "title": "Vault folder",
+      "description": "Folder of the Obsidian vault where teach-me keeps your courses (created if it doesn't exist). Ideally a git repository, so that your progress is versioned.",
+      "required": true
+    }
+  }
+}

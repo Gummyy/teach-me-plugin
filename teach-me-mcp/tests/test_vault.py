@@ -13,6 +13,12 @@ def test_missing_vault_env(monkeypatch):
         vault.vault_path()
 
 
+def test_relative_vault_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(vault.VAULT_ENV, ".")
+    assert vault.vault_path() == tmp_path.resolve()
+
+
 def test_slugify():
     assert vault.slugify("Réseaux de neurones convolutifs !") == "reseaux-de-neurones-convolutifs"
     assert vault.slugify("???") == "untitled"

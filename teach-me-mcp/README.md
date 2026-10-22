@@ -13,54 +13,54 @@ vault/
     └── exams/<YYYY-MM-DD>-<title>.md
 ```
 
+The vault path is read from the `TEACH_ME_VAULT` environment variable (a relative path is relative to the working directory). The folder is created if it doesn't exist.
+
 ## Code layout
 
-| Path                         | Content                                                                 |
-| ---------------------------- | ----------------------------------------------------------------------- |
-| `server.py`                  | The FastMCP server : registers the tools                                |
-| `teach_me/tools/`            | The 16 tools, as plain functions (docstrings are what the model reads)  |
-| `teach_me/database/vault.py` | Markdown files, frontmatter, slugs, links, time                         |
-| `teach_me/database/objects.py` | Where each object lives in the vault, session log, marks history      |
-| `tests/`                     | pytest suite, each test runs in a temporary vault                       |
+| Path                           | Content                                                                |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `teach_me/server.py`           | The FastMCP server : registers the tools. `main()` is the `teach-me-mcp` command |
+| `teach_me/tools/`              | The 16 tools, as plain functions (docstrings are what the model reads) |
+| `teach_me/database/vault.py`   | Markdown files, frontmatter, slugs, links, time                        |
+| `teach_me/database/objects.py` | Where each object lives in the vault, session log, marks history       |
+| `tests/`                       | pytest suite, each test runs in a temporary vault                      |
+| `server.py`                    | Runs the server without installing it : `python server.py`             |
 
-## Setup
+## Run the tests
 
-```powershell
-# from the root of the repository
-C:\Users\ebouaziz\Python\agentic_env\Scripts\python.exe -m pip install -r teach-me-mcp\requirements.txt
+With uv :
+
+```bash
 cd teach-me-mcp
-C:\Users\ebouaziz\Python\agentic_env\Scripts\python.exe -m pytest
+uv run pytest
 ```
 
-The vault path is read from the `TEACH_ME_VAULT` environment variable. The folder is created if it doesn't exist.
+Or with a venv :
+
+```bash
+python -m pip install -r requirements.txt
+python -m pytest
+```
 
 ## Try the tools by hand
 
-The MCP Inspector calls the tools without any LLM (needs Node.js) :
+The MCP Inspector calls the tools without any LLM (needs Node.js). The Inspector doesn't pass your shell's environment to the server, so give it the vault with `-e` :
 
-```powershell
-$env:TEACH_ME_VAULT = "C:\path\to\the\repository\vault"
-npx @modelcontextprotocol/inspector C:\Users\ebouaziz\Python\agentic_env\Scripts\python.exe server.py
+```bash
+npx @modelcontextprotocol/inspector -e TEACH_ME_VAULT="$TEACH_ME_VAULT" uv run --project . teach-me-mcp
 ```
 
-## Connect it to a client
+## Run it
 
-**Claude Code**
+The plugin starts the server for you (see the [main README](../README.md)). To declare it by hand in an MCP client, the command is :
 
-```powershell
-claude mcp add teach-me --env TEACH_ME_VAULT=C:\path\to\the\repository\vault -- C:\Users\ebouaziz\Python\agentic_env\Scripts\python.exe C:\path\to\the\repository\teach-me-mcp\server.py
+```bash
+uv run --project /path/to/teach-me-mcp teach-me-mcp                                   # from a clone
+uvx --from "git+https://github.com/Gummyy/teach-me-plugin#subdirectory=teach-me-mcp" teach-me-mcp  # from GitHub
 ```
 
-**Claude Desktop** (`claude_desktop_config.json`)
+with `TEACH_ME_VAULT` set in the server's environment, for example :
 
-```json
-{
-  "mcpServers": {
-    "teach-me": {
-      "command": "C:\\Users\\ebouaziz\\Python\\agentic_env\\Scripts\\python.exe",
-      "args": ["C:\\path\\to\\the\\repository\\teach-me-mcp\\server.py"],
-      "env": { "TEACH_ME_VAULT": "C:\\path\\to\\the\\repository\\vault" }
-    }
-  }
-}
+```bash
+claude mcp add teach-me --env TEACH_ME_VAULT=/path/to/the/vault -- uv run --project /path/to/teach-me-mcp teach-me-mcp
 ```

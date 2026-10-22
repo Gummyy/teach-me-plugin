@@ -1,0 +1,15 @@
+{
+  "name": "gummyy",
+  "owner": {
+    "name": "Gummyy",
+    "url": "https://github.com/Gummyy"
+  },
+  "description": "Plugins built during the agentic teacher workshop.",
+  "plugins": [
+    {
+      "name": "teach-me",
+      "source": "./",
+      "description": "A teacher that remembers you : classes, quizzes, project exercises and a report card, kept in your own Obsidian vault."
+    }
+  ]
+}
