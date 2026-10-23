@@ -24,7 +24,7 @@ SESSION_TIMEOUT = timedelta(hours=3)
 SESSION_HEADING = re.compile(r"^## (\d{4}-\d{2}-\d{2} \d{2}:\d{2})[ \t]*$", re.MULTILINE)
 EXAM_TYPES = ("quiz", "project")
 EXAM_STATUSES = ("assigned", "filled", "corrected")
-RESOURCE_STATUSES = ("new", "explained")
+RESOURCE_STATUSES = ("new", "explained", "dropped")
 DOCUMENT_KINDS = ("classes", "exams")
 
 

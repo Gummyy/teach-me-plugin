@@ -51,3 +51,20 @@ def test_list_users(vault):
     create_user("Alice")
     create_user("Bob")
     assert {user["slug"] for user in list_users()} == {"alice", "bob"}
+
+
+def test_interface_preferences(vault):
+    create_user("Alice", interface_preferences={"terminal": {"quizzes": "in the vault"}})
+    user = edit_user("alice", interface_preferences={"app": {"quizzes": "in the chat"}})
+    assert user["interface_preferences"] == {"terminal": {"quizzes": "in the vault"}, "app": {"quizzes": "in the chat"}}
+    user = edit_user("alice", interface_preferences={"terminal": {}})  # clears one interface only
+    assert user["interface_preferences"] == {"terminal": {}, "app": {"quizzes": "in the chat"}}
+    with pytest.raises(ToolError, match="Unknown interface 'phone'"):
+        edit_user("alice", interface_preferences={"phone": {"quizzes": "in the chat"}})
+
+
+def test_users_created_before_interface_preferences(vault):
+    create_user("Alice")
+    path = vault / "users" / "alice.md"
+    path.write_text(path.read_text(encoding="utf-8").replace("interface_preferences: {}\n", ""), encoding="utf-8")
+    assert get_user("alice")["interface_preferences"] == {}

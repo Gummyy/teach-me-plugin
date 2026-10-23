@@ -15,6 +15,14 @@ def test_share_and_update_resource(course):
     assert get_course_state(course)["new_resources"] == []
 
 
+def test_dropped_resource(course):
+    share_resource(course, "Old podcast", web_url="https://example.com/old")
+    update_resource(course, "Old podcast", "dropped")
+    assert get_course_state(course)["new_resources"] == []
+    share_resource(course, "Old podcast", web_url="https://example.com/old")  # relevant again
+    assert [r["title"] for r in get_course_state(course)["new_resources"]] == ["Old podcast"]
+
+
 def test_sharing_again_doesnt_duplicate(course):
     share_resource(course, "Video", web_url="https://example.com")
     share_resource(course, "Same video", web_url="https://example.com")
