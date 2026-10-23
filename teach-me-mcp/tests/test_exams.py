@@ -30,7 +30,9 @@ def test_exam_lifecycle(course, vault):
     exam = vault_io.read(vault / path)
     assert exam.metadata["status"] == "corrected"
     assert exam.metadata["skills"] == [{"name": "convolution", "mark": 66, "comment": "Forgot the flip"}]
-    assert exam.body == "# Corrected"
+    assert exam.body.startswith("# Convolution quiz\n\n### Question 1\n\n- [x] A")  # the exam is kept
+    assert exam.body.endswith("# Corrected")
+    assert "## ✅ Correction (" in exam.body
 
     state = get_course_state(course)
     assert state["pending_exams"] == []
@@ -78,3 +80,14 @@ def test_latest_mark_follows_the_exams(course):
 def test_unknown_exam(course):
     with pytest.raises(ToolError, match="Unknown exam"):
         read_exam("nope")
+
+
+def test_correction_never_removes_content(course, vault):
+    path = create_exam(course, "Quiz", "quiz", QUIZ, ["convolution"])
+    slug = path.rsplit("/", 1)[-1][:-3]
+    correct_exam(slug, "## Correction\n\n1. A was right", {"convolution": 50}, ["correct"])
+    correct_exam(slug, "1. After the retake, B was right too", {"convolution": 80}, ["correct"])  # a second correction
+    body = vault_io.read(vault / path).body
+    assert body.startswith(QUIZ.strip())
+    assert body.count("## ✅ Correction (") == 2  # the model's own heading is replaced by the tool's
+    assert body.index("A was right") < body.index("B was right too")

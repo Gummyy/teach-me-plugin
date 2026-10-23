@@ -136,11 +136,11 @@ Every exercise follows the same cycle :
 2. Let the student answer, where the interface makes it easiest (see [Adapt to the interface](#adapt-to-the-interface)) :
    - **in the chat** (app or browser) : ask the questions in the chat, with an interactive question tool when you have one. Questions that need a long answer (code, formulas, diagrams) can still be answered in the exam file.
    - **in the vault** (terminal) : ask the student to fill the exam file and to tell you when they're done, then call `read_exam`.
-3. Correct the answers, then call `correct_exam` with the corrected exam (questions, answers of the student, correction), a mark for each evaluated skill and the outcome of each question. Even if you have already given the correction in the chat, the correction must be saved : it is useful for the student and for you.
+3. Correct the answers, then call `correct_exam` with the correction, a mark for each evaluated skill and the outcome of each question. The correction is added below the exam, which is never rewritten : don't repeat the questions, but for a quiz taken in the chat, write the student's answer before each correction. Even if you have already given the correction in the chat, the correction must be saved : it is useful for the student and for you.
 
 ## Quizzes
 
-Use [this example](references/convolution_quiz_corrected.md) as a general example on how to format a corrected quiz.
+Use [this example](references/convolution_quiz_corrected.md) as a general example on how to format the questions of a quiz and the callouts of its correction.
 
 The quiz must accomplish 2 missions :
 - validate skills

@@ -1,5 +1,6 @@
 """Creating, reading and correcting exams."""
 
+import re
 from typing import Literal, Optional
 
 from teach_me.database import objects, vault
@@ -7,6 +8,7 @@ from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 
 Outcome = Literal["correct", "incomplete", "wrong"]
+_CORRECTION_HEADING = re.compile(r"\A\s*#{1,6}[^\n]*correction[^\n]*\n", re.IGNORECASE)
 
 
 def create_exam(
@@ -100,11 +102,11 @@ def correct_exam(
     outcomes: list[Outcome],
     comments: Optional[dict[str, str]] = None,
 ) -> dict:
-    """Saves the correction of an exam and sets its status to "corrected".
+    """Saves the correction of an exam and sets its status to "corrected". The exam itself is never rewritten : the correction is added below it.
 
     Args:
         exam (str): The slug of the exam
-        correction (str): The corrected exam, in markdown : the questions, the answers of the student and a correction after each question. It replaces the content of the exam file.
+        correction (str): The correction, in markdown. It is appended at the end of the exam file under a dated "Correction" heading, after the questions and the answers already in the file. Don't repeat the questions : for each question, give its number, the answer of the student when it isn't in the file (e.g. a quiz taken in the chat) and the correction.
         marks (dict[str, int]): A mark between 0 and 100 for each evaluated skill
         outcomes (list[Literal["correct", "incomplete", "wrong"]]): The outcome of each question, in order
         comments (Optional[dict[str, str]]): A short comment for each evaluated skill. Defaults to None.
@@ -118,7 +120,7 @@ def correct_exam(
     comments = comments or {}
 
     if not (correction or "").strip():
-        raise ToolError("The `correction` is empty : send the corrected exam, in markdown.")
+        raise ToolError("The `correction` is empty : send the correction of each question, in markdown.")
     unknown = [skill for skill in [*marks, *comments] if skill not in evaluated]
     if unknown:
         raise ToolError(f"This exam doesn't evaluate : {', '.join(dict.fromkeys(unknown))}. Evaluated skills : {', '.join(evaluated)}.")
@@ -140,7 +142,9 @@ def correct_exam(
         evaluation["comment"] = comments.get(name, evaluation.get("comment"))
     document.metadata["status"] = "corrected"
     document.metadata["updated_at"] = vault.format_time(vault.now())
-    document.body = correction
+    correction = _CORRECTION_HEADING.sub("", correction, count=1).strip()  # the tool writes its own heading
+    heading = f"## ✅ Correction ({vault.format_session(vault.now())})"
+    document.body = f"{document.body.rstrip()}\n\n{heading}\n\n{correction}".lstrip("\n")
     vault.write(document)
 
     shares = {outcome: round(outcomes.count(outcome) / len(outcomes), 2) for outcome in ("correct", "incomplete", "wrong")}
