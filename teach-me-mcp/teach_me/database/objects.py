@@ -201,10 +201,15 @@ def document_course(document: Document) -> str:
     return document.path.parent.parent.name
 
 
+def iter_documents(course: str, kind: str) -> Iterator[Document]:
+    """The classes or the exams of a course, in chronological order."""
+    documents = [vault.read(path) for path in (courses_dir() / course / kind).glob("*.md")]
+    documents.sort(key=lambda document: (vault.parse_time(document.metadata.get("created_at")) or datetime.min, document.slug))
+    yield from documents
+
+
 def iter_exams(course: str) -> Iterator[Document]:
-    exams = [vault.read(path) for path in (courses_dir() / course / "exams").glob("*.md")]
-    exams.sort(key=lambda exam: (vault.parse_time(exam.metadata.get("created_at")) or datetime.min, exam.slug))
-    yield from exams
+    yield from iter_documents(course, "exams")
 
 
 def mark_history(course: str) -> dict[str, list[int]]:

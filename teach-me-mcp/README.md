@@ -20,7 +20,7 @@ The vault path is read from the `TEACH_ME_VAULT` environment variable (a relativ
 | Path                           | Content                                                                |
 | ------------------------------ | ---------------------------------------------------------------------- |
 | `teach_me/server.py`           | The FastMCP server : registers the tools. `main()` is the `teach-me-mcp` command |
-| `teach_me/tools/`              | The 16 tools, as plain functions (docstrings are what the model reads) |
+| `teach_me/tools/`              | The 18 tools, as plain functions (docstrings are what the model reads) |
 | `teach_me/database/vault.py`   | Markdown files, frontmatter, slugs, links, time                        |
 | `teach_me/database/objects.py` | Where each object lives in the vault, session log, marks history       |
 | `tests/`                       | pytest suite, each test runs in a temporary vault                      |

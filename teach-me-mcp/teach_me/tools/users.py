@@ -26,15 +26,26 @@ def _validate_skills(skills: list[SkillDeclaration], argument: str) -> list[dict
     return cleaned
 
 
-def _validate_interface_preferences(values: dict) -> dict[str, dict[str, str]]:
+def _validate_interface_preferences(values: dict) -> dict[str, dict]:
     cleaned = {}
     for interface, preferences in values.items():
         if interface not in INTERFACES:
             raise ToolError(f"Unknown interface '{interface}'. Use one of : {', '.join(INTERFACES)}.")
         if not isinstance(preferences, dict):
             raise ToolError(f"The preferences of the interface '{interface}' must be a dictionary, e.g. {{\"quizzes\": \"in the chat\"}}.")
-        cleaned[interface] = {str(key): str(value) for key, value in preferences.items()}
+        cleaned[interface] = {str(key): None if value is None else str(value) for key, value in preferences.items()}
     return cleaned
+
+
+def merge(current: Optional[dict], changes: dict) -> dict:
+    """Applies `changes` to `current` : a None value removes the key, any other value adds or replaces it."""
+    merged = dict(current or {})
+    for key, value in changes.items():
+        if value is None:
+            merged.pop(key, None)
+        else:
+            merged[key] = value
+    return merged
 
 
 def _user_activity(user: Document):
@@ -89,8 +100,11 @@ def create_user(
         {
             "name": name,
             "created_at": vault.format_time(vault.now()),
-            "preferences": dict(preferences or {}),
-            "interface_preferences": _validate_interface_preferences(interface_preferences or {}),
+            "preferences": merge({}, dict(preferences or {})),
+            "interface_preferences": {
+                interface: merge({}, values)
+                for interface, values in _validate_interface_preferences(interface_preferences or {}).items()
+            },
             "known_skills": [],
         },
         (description or "").strip(),
@@ -103,19 +117,21 @@ def edit_user(
     user: str,
     name: Optional[str] = None,
     description: Optional[str] = None,
-    preferences: Optional[dict[str, str]] = None,
-    interface_preferences: Optional[dict[Interface, dict[str, str]]] = None,
-    known_skills: Optional[list[SkillDeclaration]] = None,
+    preferences: Optional[dict[str, Optional[str]]] = None,
+    interface_preferences: Optional[dict[Interface, dict[str, Optional[str]]]] = None,
+    add_known_skills: Optional[list[SkillDeclaration]] = None,
+    remove_known_skills: Optional[list[str]] = None,
 ) -> dict:
-    """Edits a user. All values which are left to None won't be updated.
+    """Edits a user. Nothing is replaced as a whole : only the values you give change, all the others are kept.
 
     Args:
         user (str): The slug of the user
         name (Optional[str]): The new name of the user. Defaults to None.
         description (Optional[str]): The new description of the user. Defaults to None.
-        preferences (Optional[dict[str, str]]): The new preferences of the user that don't depend on the interface. Replaces all these preferences. Defaults to None.
-        interface_preferences (Optional[dict[Interface, dict[str, str]]]): The new preferences of the given interfaces ("terminal" or "app"). Replaces the preferences of each given interface, and leaves the other interface unchanged. Defaults to None.
-        known_skills (Optional[list[SkillDeclaration]]): The skills the user already has. Replaces the whole list. Defaults to None.
+        preferences (Optional[dict[str, Optional[str]]]): Preferences that don't depend on the interface, to add or change, e.g. {"tone": "casual"}. A null value removes that preference. The other preferences are kept. Defaults to None.
+        interface_preferences (Optional[dict[Interface, dict[str, Optional[str]]]]): Preferences of an interface ("terminal" or "app") to add or change, e.g. {"app": {"quizzes": "in the chat"}}. A null value removes that preference. The other preferences are kept. Defaults to None.
+        add_known_skills (Optional[list[SkillDeclaration]]): Skills the user already has, to add (or to update, for a skill with the same name). Defaults to None.
+        remove_known_skills (Optional[list[str]]): Names of known skills to remove. Defaults to None.
 
     Returns:
         dict: The updated user, as returned by `get_user`
@@ -128,13 +144,22 @@ def edit_user(
     if description is not None:
         document.body = description.strip()
     if preferences is not None:
-        document.metadata["preferences"] = dict(preferences)
+        document.metadata["preferences"] = merge(document.metadata.get("preferences"), preferences)
     if interface_preferences is not None:
-        merged = dict(document.metadata.get("interface_preferences") or {})
-        merged.update(_validate_interface_preferences(interface_preferences))
-        document.metadata["interface_preferences"] = merged
-    if known_skills is not None:
-        document.metadata["known_skills"] = _validate_skills(known_skills, "known_skills")
+        current = dict(document.metadata.get("interface_preferences") or {})
+        for interface, changes in _validate_interface_preferences(interface_preferences).items():
+            current[interface] = merge(current.get(interface), changes)
+        document.metadata["interface_preferences"] = current
+    if add_known_skills or remove_known_skills:
+        skills = {str(skill.get("name")).lower(): skill for skill in document.metadata.get("known_skills") or [] if isinstance(skill, dict)}
+        unknown = [name for name in remove_known_skills or [] if name.lower() not in skills]
+        if unknown:
+            raise ToolError(f"Unknown known skills : {', '.join(unknown)}. Known skills : {', '.join(s['name'] for s in skills.values()) or 'none'}.")
+        for name in remove_known_skills or []:
+            skills.pop(name.lower())
+        for skill in _validate_skills(add_known_skills or [], "add_known_skills"):
+            skills[skill["name"].lower()] = skill
+        document.metadata["known_skills"] = list(skills.values())
     vault.write(document)
     return get_user(user)
 

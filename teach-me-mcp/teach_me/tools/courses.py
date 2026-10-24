@@ -1,5 +1,6 @@
 """Creating and identifying projects and courses."""
 
+from datetime import datetime
 from typing import Optional
 
 from teach_me.database import objects, vault
@@ -7,6 +8,67 @@ from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.schemas import SkillDeclaration
 from teach_me.tools.users import _validate_skills
+
+PROGRESS_HEADING = "## Progress"
+CLASSES_BEFORE_EXERCISE = 2
+"""The skill asks for at least one exercise every 2 classes."""
+TARGET_CORRECT, TARGET_WRONG = 0.66, 0.09
+"""A good exam : about 66 % of correct answers and less than 9 % of wrong ones."""
+
+
+def _created(document: Document) -> datetime:
+    return vault.parse_time(document.metadata.get("created_at")) or datetime.min
+
+
+def _progress(course: str) -> dict:
+    """Cadence and difficulty, computed from the classes and the corrected exams, so that the teacher doesn't have to keep count."""
+    exams = list(objects.iter_exams(course))
+    last_exam = exams[-1] if exams else None
+    since = _created(last_exam) if last_exam else datetime.min
+    classes_since = sum(1 for document in objects.iter_documents(course, "classes") if _created(document) > since)
+
+    advice, last = [], None
+    corrected = [exam for exam in exams if exam.metadata.get("status") == "corrected" and exam.metadata.get("questions")]
+    if corrected:
+        exam = corrected[-1]
+        outcomes = [q.get("outcome") for q in exam.metadata["questions"] if q.get("outcome")]
+        if outcomes:
+            shares = {outcome: round(outcomes.count(outcome) / len(outcomes), 2) for outcome in ("correct", "incomplete", "wrong")}
+            last = {"slug": exam.slug, "title": exam.metadata.get("title"), **shares}
+            if shares["correct"] == 0 and shares["incomplete"] == 0:
+                advice.append("The last exam validated no skill : re-explain its concepts, then propose an easier exercise on them.")
+            elif shares["correct"] == 1:
+                advice.append("The last exam was fully successful : make the next one harder (it should stay rare).")
+            elif shares["wrong"] > TARGET_WRONG * 3 or shares["correct"] < TARGET_CORRECT / 2:
+                advice.append("The last exam was too hard : lower the difficulty of the next one.")
+            elif shares["correct"] > 0.85:
+                advice.append("The last exam was a bit easy : raise the difficulty of the next one.")
+            else:
+                advice.append("The difficulty of the last exam was right : keep it.")
+    pending = [exam for exam in exams if exam.metadata.get("status") in ("assigned", "filled")]
+    if pending:
+        advice.append(f"{len(pending)} exam(s) waiting for an answer or a correction : deal with them before creating a new one.")
+    elif classes_since >= CLASSES_BEFORE_EXERCISE:
+        advice.append(f"{classes_since} classes since the last exercise : propose an exercise before the next class.")
+    return {"classes_since_last_exam": classes_since, "last_corrected_exam": last, "advice": advice}
+
+
+def _split_project(body: str) -> tuple[str, str]:
+    """A project file holds its description, then the "## Progress" log."""
+    description, _, progress = body.partition(PROGRESS_HEADING)
+    return description.strip(), progress.strip()
+
+
+def _project_summary(project: str) -> dict:
+    document = objects.get_project(project)
+    description, progress = _split_project(document.body)
+    entries = [line[2:] for line in progress.splitlines() if line.startswith("- ")]
+    return {
+        "slug": project,
+        "name": document.metadata.get("name"),
+        "description": description,
+        "last_progress": entries[-3:],
+    }
 
 
 def create_project(user: str, name: str, description: str) -> str:
@@ -31,6 +93,42 @@ def create_project(user: str, name: str, description: str) -> str:
     )
     vault.write(document)
     return slug
+
+
+def update_project(
+    project: str,
+    progress: Optional[str] = None,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Updates a project as it advances. The progress log only grows : entries are never removed.
+
+    Args:
+        project (str): The slug of the project
+        progress (Optional[str]): 1-2 sentences about what changed in the project (a step done, a decision, a new problem), added to its dated progress log. Defaults to None.
+        name (Optional[str]): The new name of the project. Its slug doesn't change. Defaults to None.
+        description (Optional[str]): The new description, when the goal or the scope of the project changed. The progress log is kept. Defaults to None.
+
+    Returns:
+        dict: {"slug", "name", "description", "last_progress"} : the project after the update
+    """
+    document = objects.get_project(project)
+    if progress is None and name is None and description is None:
+        raise ToolError("Nothing to update : give a `progress` entry, a new `name` or a new `description`.")
+    current_description, log = _split_project(document.body)
+    if name is not None:
+        if not name.strip():
+            raise ToolError("The project `name` can't be empty.")
+        document.metadata["name"] = name.strip()
+    if description is not None:
+        current_description = description.strip()
+    if progress is not None and progress.strip():
+        entry = f"- {vault.now():%Y-%m-%d} : {' '.join(progress.split())}"
+        log = f"{log}\n{entry}".strip()
+    document.metadata["updated_at"] = vault.format_time(vault.now())
+    document.body = current_description + (f"\n\n{PROGRESS_HEADING}\n\n{log}" if log else "")
+    vault.write(document)
+    return _project_summary(project)
 
 
 def create_course(
@@ -123,11 +221,13 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
 
     Returns:
         dict: {
-            "slug", "name", "subject", "starting_level", "projects",
+            "slug", "name", "subject", "starting_level",
+            "projects": [{"slug", "name", "description", "last_progress"}],
             "skills": [{"name", "description", "latest_mark"}],
             "sessions": [{"session", "entries"}], the last sessions, most recent first,
             "pending_exams": exams whose status is "assigned" or "filled",
             "new_resources": shared resources whose status is "new",
+            "progress": {"classes_since_last_exam", "last_corrected_exam", "advice"} : what to do next, computed from the classes and the exams,
         }
     """
     document = objects.get_course(course)
@@ -164,9 +264,10 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         "name": metadata.get("name"),
         "subject": metadata.get("subject"),
         "starting_level": metadata.get("starting_level"),
-        "projects": [vault.unlink(project) for project in metadata.get("projects") or []],
+        "projects": [_project_summary(vault.unlink(project)) for project in metadata.get("projects") or []],
         "skills": skills,
         "sessions": [{"session": label, "entries": entries} for label, entries in sessions],
         "pending_exams": pending,
         "new_resources": resources,
+        "progress": _progress(course),
     }

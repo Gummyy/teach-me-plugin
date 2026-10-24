@@ -13,8 +13,7 @@ mcp = FastMCP(
     instructions=(
         "Persistent memory of the teach-me skill : users, projects, courses, sessions, classes, "
         "exams, shared resources and report cards, stored in the student's Obsidian vault. "
-        "Objects are identified by their slug. Start every conversation with list_users, "
-        "list_courses and get_course_state."
+        "Objects are identified by their slug. Start every conversation with start_session."
     ),
 )
 

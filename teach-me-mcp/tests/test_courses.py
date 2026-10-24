@@ -14,6 +14,8 @@ from teach_me.tools import (
     list_users,
     log_session,
     save_class,
+    start_session,
+    update_project,
 )
 
 
@@ -87,3 +89,40 @@ def test_same_class_title_gets_a_new_slug(course):
     first = save_class(course, "Convolution", "", "Content")
     second = save_class(course, "Convolution", "", "Content")
     assert first != second and second.endswith("-convolution-2.md")
+
+
+def test_update_project_keeps_its_history(course):
+    update_project("pet-classifier", progress="Dataset collected : 2000 pictures")
+    project = update_project("pet-classifier", progress="First CNN trained", description="Classify cats, dogs and rabbits.")
+    assert project["description"] == "Classify cats, dogs and rabbits."
+    assert [entry.split(" : ", 1)[1] for entry in project["last_progress"]] == ["Dataset collected : 2000 pictures", "First CNN trained"]
+    assert get_course_state(course)["projects"][0]["name"] == "Pet classifier"
+    with pytest.raises(ToolError, match="Nothing to update"):
+        update_project("pet-classifier")
+
+
+def test_start_session(course):
+    create_user("Bob")
+    several = start_session("terminal")
+    assert {u["slug"] for u in several["users"]} == {"alice", "bob"} and "who they are" in several["next_step"]
+
+    without_course = start_session("app", user="alice")
+    assert [c["slug"] for c in without_course["courses"]] == ["computer-vision"]
+    assert without_course["course"] is None and "start_session again with `course`" in without_course["next_step"]
+
+    session = start_session("terminal", user="alice", course=course)
+    assert session["course"]["slug"] == course
+    assert "Session in the terminal" in session["course"]["sessions"][0]["entries"]
+    with pytest.raises(ToolError, match="belongs to 'alice'"):
+        start_session("terminal", user="bob", course=course)
+    with pytest.raises(ToolError, match="Unknown interface"):
+        start_session("phone")
+
+
+def test_start_session_merges_the_preferences_of_the_interface(vault):
+    create_user("Alice", preferences={"tone": "casual", "quizzes": "anywhere"}, interface_preferences={"terminal": {"quizzes": "in the vault"}})
+    assert start_session("terminal")["preferences"] == {"tone": "casual", "quizzes": "in the vault"}
+    assert start_session("app")["preferences"] == {"tone": "casual", "quizzes": "anywhere"}
+    assert "no course yet" in start_session("app")["next_step"]
+    vault_empty = vault / "users" / "alice.md"
+    assert vault_empty.is_file()

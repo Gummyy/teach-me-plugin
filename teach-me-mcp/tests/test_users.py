@@ -27,7 +27,7 @@ def test_name_too_short(vault):
 
 def test_edit_user_only_changes_given_values(vault):
     create_user("Alice", "Likes photography")
-    user = edit_user("alice", known_skills=[{"name": "python", "description": "numpy and pandas"}])
+    user = edit_user("alice", add_known_skills=[{"name": "python", "description": "numpy and pandas"}])
     assert user["description"] == "Likes photography"
     assert user["known_skills"] == [{"name": "python", "description": "numpy and pandas"}]
     assert edit_user("alice", name="Ali")["name"] == "Ali"
@@ -37,7 +37,7 @@ def test_edit_user_only_changes_given_values(vault):
 def test_edit_user_rejects_duplicated_skills(vault):
     create_user("Alice")
     with pytest.raises(ToolError, match="twice"):
-        edit_user("alice", known_skills=[{"name": "python", "description": ""}, {"name": "Python", "description": ""}])
+        edit_user("alice", add_known_skills=[{"name": "python", "description": ""}, {"name": "Python", "description": ""}])
 
 
 def test_unknown_user_lists_known_users(vault):
@@ -57,7 +57,7 @@ def test_interface_preferences(vault):
     create_user("Alice", interface_preferences={"terminal": {"quizzes": "in the vault"}})
     user = edit_user("alice", interface_preferences={"app": {"quizzes": "in the chat"}})
     assert user["interface_preferences"] == {"terminal": {"quizzes": "in the vault"}, "app": {"quizzes": "in the chat"}}
-    user = edit_user("alice", interface_preferences={"terminal": {}})  # clears one interface only
+    user = edit_user("alice", interface_preferences={"terminal": {"quizzes": None}})  # removes one preference only
     assert user["interface_preferences"] == {"terminal": {}, "app": {"quizzes": "in the chat"}}
     with pytest.raises(ToolError, match="Unknown interface 'phone'"):
         edit_user("alice", interface_preferences={"phone": {"quizzes": "in the chat"}})
@@ -68,3 +68,23 @@ def test_users_created_before_interface_preferences(vault):
     path = vault / "users" / "alice.md"
     path.write_text(path.read_text(encoding="utf-8").replace("interface_preferences: {}\n", ""), encoding="utf-8")
     assert get_user("alice")["interface_preferences"] == {}
+
+
+def test_edits_are_merged_not_replaced(vault):
+    create_user("Alice", preferences={"language": "french", "tone": "casual"})
+    user = edit_user("alice", preferences={"tone": "formal", "diagrams": "lots"})
+    assert user["preferences"] == {"language": "french", "tone": "formal", "diagrams": "lots"}
+    assert edit_user("alice", preferences={"diagrams": None})["preferences"] == {"language": "french", "tone": "formal"}
+
+    edit_user("alice", interface_preferences={"terminal": {"quizzes": "in the vault", "classes": "in the vault"}})
+    user = edit_user("alice", interface_preferences={"terminal": {"classes": None}})
+    assert user["interface_preferences"] == {"terminal": {"quizzes": "in the vault"}}
+
+
+def test_known_skills_are_added_and_removed(vault):
+    create_user("Alice")
+    edit_user("alice", add_known_skills=[{"name": "python", "description": "basics"}, {"name": "sql", "description": ""}])
+    user = edit_user("alice", add_known_skills=[{"name": "Python", "description": "numpy"}], remove_known_skills=["sql"])
+    assert user["known_skills"] == [{"name": "Python", "description": "numpy"}]
+    with pytest.raises(ToolError, match="Unknown known skills : go"):
+        edit_user("alice", remove_known_skills=["go"])
