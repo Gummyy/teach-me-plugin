@@ -19,7 +19,7 @@ def share_resource(
     web_url: Optional[str] = None,
     file_path: Optional[str] = None,
 ) -> str:
-    """Remembers an external content shared with the student during the current session. At least one of web_url / file_path is required. Sharing an already known resource again updates its session, and makes a dropped resource new again.
+    """Remembers an external content shared with the student during the current session. At least one of web_url / file_path is required. Sharing an already known resource again updates its session, and makes a unprocessed resource new again.
 
     Args:
         course (str): The slug of the course
@@ -49,7 +49,7 @@ def share_resource(
         resource = {"title": title.strip(), **location, "status": "new", "created_at": vault.format_time(vault.now())}
         resources.append(resource)
     resource["session"] = label
-    if resource.get("status") == "dropped":
+    if resource.get("status") == "unprocessed":
         resource["status"] = "new"
 
     target = location.get("file_path") or location.get("web_url")
@@ -58,13 +58,13 @@ def share_resource(
     return str(resource["title"])
 
 
-def update_resource(course: str, title: str, status: Literal["new", "explained", "dropped"]) -> str:
-    """Updates the status of a shared resource : "explained" once the student has engaged with it, "dropped" when it is no longer relevant. Only "new" resources are returned by get_course_state.
+def update_resource(course: str, title: str, status: Literal["new", "explained", "unprocessed"]) -> str:
+    """Updates the status of a shared resource : "explained" once the student has engaged with it, "unprocessed" when it is no longer relevant. Only "new" resources are returned by get_course_state.
 
     Args:
         course (str): The slug of the course
         title (str): The title of the resource
-        status (Literal["new", "explained", "dropped"]): The new status
+        status (Literal["new", "explained", "unprocessed"]): The new status
 
     Returns:
         str: The title of the resource

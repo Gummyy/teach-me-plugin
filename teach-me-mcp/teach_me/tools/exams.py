@@ -70,7 +70,7 @@ def create_exam(
     metadata = {"title": title.strip(), "type": type, "status": "assigned", "session": label}
     if project is not None:
         metadata["project"] = vault.link(project)
-    skills = list(dict.fromkeys(question["skill"] for question in public))
+    skills = list(dict.fromkeys(skill for question in public for skill in question["skills"]))
     metadata.update(
         {
             "created_at": moment,

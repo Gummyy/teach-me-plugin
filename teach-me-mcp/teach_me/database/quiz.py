@@ -69,9 +69,14 @@ def validate_questions(questions: list, declared_skills: list[str]) -> tuple[lis
         text = str(question.get("text") or "").strip()
         if not text:
             raise ToolError(f"{where} has no `text`.")
-        skill = str(question.get("skill") or "")
-        if skill not in declared_skills:
-            raise ToolError(f"{where} evaluates '{skill}', which isn't declared in the course. Declared skills : {', '.join(declared_skills)}.")
+        skills = question.get("skills", [])
+        if not skills:
+            raise ToolError(
+                f"{where} is associated with no skills. Associate it with at least one skill among : {', '.join(declared_skills)}"
+            )
+        for skill in skills:
+            if skill not in declared_skills:
+                raise ToolError(f"{where} evaluates '{skill}', which isn't declared in the course. Declared skills : {', '.join(declared_skills)}.")
 
         if kind == "open":
             if question.get("options") or question.get("correct_options"):
@@ -79,7 +84,7 @@ def validate_questions(questions: list, declared_skills: list[str]) -> tuple[lis
             expected = str(question.get("expected_answer") or "").strip()
             if not expected:
                 raise ToolError(f"{where} is an open question : give its `expected_answer`, so that it can be corrected later.")
-            public.append({"kind": kind, "skill": skill, "text": text})
+            public.append({"kind": kind, "skills": skills, "text": text})
             solutions.append(expected)
             continue
 
@@ -92,7 +97,7 @@ def validate_questions(questions: list, declared_skills: list[str]) -> tuple[lis
             raise ToolError(f"{where} : give the letters of the correct options in `correct_options`, e.g. [\"B\"].")
         if kind == "single" and len(correct) != 1:
             raise ToolError(f"{where} is a single choice question : exactly one option must be correct, not {len(correct)}. Use the kind 'multiple' otherwise.")
-        public.append({"kind": kind, "skill": skill, "text": text, "options": options})
+        public.append({"kind": kind, "skills": skills, "text": text, "options": options})
         solutions.append(correct)
     return public, solutions
 

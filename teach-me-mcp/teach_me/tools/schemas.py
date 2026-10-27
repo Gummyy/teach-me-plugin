@@ -27,8 +27,8 @@ class Question(TypedDict):
     """open : the student writes the answer. single : exactly one correct option. multiple : one or more correct options"""
     text: str
     """The question, in markdown (formulas, code and diagrams are welcome)"""
-    skill: str
-    """The name of the skill it evaluates, declared in the course"""
+    skills: list[str]
+    """The names of the skills it evaluates, declared in the course"""
     options: NotRequired[list[str]]
     """Closed questions only : the options, 2 to 8, labelled A, B, C, ... in this order"""
     correct_options: NotRequired[list[str]]

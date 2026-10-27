@@ -15,9 +15,9 @@ def test_share_and_update_resource(course):
     assert get_course_state(course)["new_resources"] == []
 
 
-def test_dropped_resource(course):
+def test_unprocessed_resource(course):
     share_resource(course, "Old podcast", web_url="https://example.com/old")
-    update_resource(course, "Old podcast", "dropped")
+    update_resource(course, "Old podcast", "unprocessed")
     assert get_course_state(course)["new_resources"] == []
     share_resource(course, "Old podcast", web_url="https://example.com/old")  # relevant again
     assert [r["title"] for r in get_course_state(course)["new_resources"]] == ["Old podcast"]
