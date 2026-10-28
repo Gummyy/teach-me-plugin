@@ -49,11 +49,11 @@ def test_report_card(course, vault):
     empty = report_card(course)
     assert "**0/2** skills evaluated" in empty and "No exam yet." in empty
 
-    question = {"kind": "single", "text": "?", "skill": "convolution", "options": ["Yes", "No"], "correct_options": ["A"]}
+    question = {"kind": "single", "text": "?", "skills": ["convolution"], "options": ["Yes", "No"], "correct_options": ["A"]}
     slug = create_exam(course, "Quiz | 1", "quiz", [question, question])["slug"]
-    correct_exam(slug, [{"explanation": "."}, {"explanation": "."}], answers=["A", "B"])
+    correct_exam(slug, [{"question": 1, "explanation": "."}, {"question": 2, "explanation": "."}], answers=["A", "B"])
     card = report_card(course)
     assert "**1/2** skills evaluated, average of the latest marks : **50/100**" in card
-    assert "| convolution | Computes and interprets a 2D convolution | 50 | 50 |" in card
+    assert "| [[convolution\\|convolution]] | Computes and interprets a 2D convolution | 50 | 50 |" in card
     assert f"[[{slug}\\|Quiz \\| 1]]" in card  # pipes are escaped in tables
     assert (vault / "courses" / course / "report_card.md").is_file()

@@ -8,9 +8,11 @@ from teach_me.errors import ToolError
 from teach_me.tools import (
     create_course,
     create_project,
+    create_skills,
     create_user,
     get_course_state,
     list_courses,
+    list_projects,
     list_users,
     log_session,
     save_class,
@@ -24,13 +26,14 @@ def test_create_course(course, vault):
     document = objects.get_course(course)
     assert document.metadata["user"] == "[[alice]]"
     assert document.metadata["projects"] == ["[[pet-classifier]]"]
-    assert [skill["name"] for skill in document.metadata["skills"]] == ["convolution", "cnn-architecture"]
+    assert document.metadata["skills"] == ["[[convolution]]", "[[cnn-architecture]]"]
     assert len(objects.parse_sessions(document.body)) == 1
 
 
 def test_course_slug_defaults_to_the_subject(vault):
     create_user("Alice")
-    slug = create_course("alice", "Machine learning for time series forecasting.", "", [{"name": "arima", "description": ""}])
+    create_skills("alice", [{"name": "arima", "description": ""}])
+    slug = create_course("alice", "Machine learning for time series forecasting.", "", ["arima"])
     assert slug == "machine-learning-for-time-series"
 
 
@@ -40,11 +43,22 @@ def test_course_needs_skills(vault):
         create_course("alice", "Subject", "Level", skills=[])
 
 
+def test_course_skills_must_exist_and_belong_to_the_user(vault):
+    create_user("Alice")
+    create_user("Bob")
+    create_skills("bob", [{"name": "Welding", "description": ""}])
+    with pytest.raises(ToolError, match="Unknown skill 'nope'.*create_skills"):
+        create_course("alice", "Subject", "Level", ["nope"])
+    with pytest.raises(ToolError, match="belongs to 'bob'"):
+        create_course("alice", "Subject", "Level", ["welding"])
+
+
 def test_course_project_must_exist_and_belong_to_the_user(vault):
     create_user("Alice")
     create_user("Bob")
     create_project("bob", "Robot", "A robot")
-    skills = [{"name": "a", "description": ""}]
+    create_skills("alice", [{"name": "a", "description": ""}])
+    skills = ["a"]
     with pytest.raises(ToolError, match="Unknown project"):
         create_course("alice", "Subject", "Level", skills, projects=["nope"])
     with pytest.raises(ToolError, match="belongs to 'bob'"):
@@ -52,7 +66,7 @@ def test_course_project_must_exist_and_belong_to_the_user(vault):
 
 
 def test_list_courses_and_users_activity(course):
-    create_course("alice", "Second course", "", [{"name": "a", "description": ""}], name="Second")
+    create_course("alice", "Second course", "", ["convolution"], name="Second")  # skills are shared by the courses of a user
     assert {c["slug"] for c in list_courses("alice")} == {"computer-vision", "second"}
     assert list_users()[0]["last_activity"] is not None
 
@@ -126,3 +140,16 @@ def test_start_session_merges_the_preferences_of_the_interface(vault):
     assert "no course yet" in start_session("app")["next_step"]
     vault_empty = vault / "users" / "alice.md"
     assert vault_empty.is_file()
+
+
+def test_list_projects(course):
+    create_user("Bob")
+    create_project("bob", "Robot", "A robot")
+    create_project("alice", "Photo album", "Sort my pictures.")
+    update_project("pet-classifier", progress="Dataset collected")
+    projects = list_projects("alice")
+    assert {project["slug"] for project in projects} == {"pet-classifier", "photo-album"}
+    pet = next(project for project in projects if project["slug"] == "pet-classifier")
+    assert pet["description"] == "Classify the pictures of my cats and dogs."
+    assert pet["last_progress"][0].endswith("Dataset collected")
+    assert list_projects("bob")[0]["name"] == "Robot"

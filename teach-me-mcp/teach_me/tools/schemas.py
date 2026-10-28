@@ -28,7 +28,7 @@ class Question(TypedDict):
     text: str
     """The question, in markdown (formulas, code and diagrams are welcome)"""
     skills: list[str]
-    """The names of the skills it evaluates, declared in the course"""
+    """The slugs of the skills it evaluates, among the skills of the course. The outcome of the question counts for each of them"""
     options: NotRequired[list[str]]
     """Closed questions only : the options, 2 to 8, labelled A, B, C, ... in this order"""
     correct_options: NotRequired[list[str]]
@@ -38,9 +38,20 @@ class Question(TypedDict):
 
 
 class QuestionCorrection(TypedDict):
-    """The correction of one question."""
+    """The correction of a closed question, graded by the server."""
 
+    question: int
+    """The number of the question, starting at 1"""
     explanation: str
     """Why the right answer is right, and what the student missed, in markdown"""
-    outcome: NotRequired[Outcome]
-    """Open questions only (required for them) : the closed questions are graded by the server"""
+
+
+class OpenGrade(TypedDict):
+    """The grade of an open question."""
+
+    question: int
+    """The number of the question, starting at 1"""
+    outcome: Outcome
+    """correct : everything expected is there. incomplete : partly right. wrong : missing or incorrect"""
+    explanation: str
+    """What a good answer contains, and what the student did well or missed, in markdown"""

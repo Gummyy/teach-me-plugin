@@ -10,7 +10,7 @@ def _cell(value) -> str:
 
 
 def report_card(course: str) -> str:
-    """Regenerates the report card of a course from its skills and exams : declared skills, latest mark and progression of each skill, list of exams.
+    """Regenerates the report card of a course from its skills and exams : skills of the course, latest mark and progression of each skill (from the exams of all the courses that evaluate it), list of the exams of the course.
 
     Args:
         course (str): The slug of the course
@@ -20,9 +20,9 @@ def report_card(course: str) -> str:
     """
     document = objects.get_course(course)
     metadata = document.metadata
-    history = objects.mark_history(course)
-    skills = [skill for skill in metadata.get("skills") or [] if isinstance(skill, dict)]
-    latest = [history[str(skill.get("name"))][-1] for skill in skills if history.get(str(skill.get("name")))]
+    history = objects.mark_history(vault.unlink(metadata.get("user", "")))
+    skills = [objects.get_skill(skill) for skill in objects.course_skills(document)]
+    latest = [history[skill.slug][-1] for skill in skills if history.get(skill.slug)]
 
     lines = [f"# 🎓 Report card : {metadata.get('name') or course}", "", _cell(metadata.get("subject")), ""]
     if latest:
@@ -34,9 +34,9 @@ def report_card(course: str) -> str:
         lines.append(f"**0/{len(skills)}** skills evaluated : take an exam to start filling this report card !")
     lines += ["", "## Skills", "", "| Skill | Description | Latest mark | Progression |", "| --- | --- | --- | --- |"]
     for skill in skills:
-        marks = history.get(str(skill.get("name")), [])
+        marks = history.get(skill.slug, [])
         lines.append(
-            f"| {_cell(skill.get('name'))} | {_cell(skill.get('description'))} | "
+            f"| [[{skill.slug}\\|{_cell(skill.metadata.get('name') or skill.slug)}]] | {_cell(skill.body)} | "
             f"{marks[-1] if marks else '—'} | {' → '.join(map(str, marks)) if marks else 'not evaluated yet'} |"
         )
 

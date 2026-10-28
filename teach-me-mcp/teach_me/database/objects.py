@@ -2,7 +2,8 @@
 
     users/<user>.md
     projects/<project>.md
-    courses/<course>/course.md        (skills, resources and the session log)
+    skills/<skill>.md                 (owned by a user, shared by their courses)
+    courses/<course>/course.md        (links to its skills, resources and the session log)
     courses/<course>/classes/<class>.md
     courses/<course>/exams/<exam>.md   (evaluations in the frontmatter)
     courses/<course>/report_card.md   (generated)
@@ -39,6 +40,10 @@ def users_dir() -> Path:
 
 def projects_dir() -> Path:
     return vault.vault_path() / "projects"
+
+
+def skills_dir() -> Path:
+    return vault.vault_path() / "skills"
 
 
 def courses_dir() -> Path:
@@ -86,6 +91,35 @@ def get_project(project: str) -> Document:
     return vault.read(path)
 
 
+def iter_projects(user: str) -> Iterator[Document]:
+    for path in sorted(projects_dir().glob("*.md")):
+        document = vault.read(path)
+        if vault.unlink(document.metadata.get("user", "")) == user:
+            yield document
+
+
+# --------------------------------------------------------------------------- #
+# Skills
+# --------------------------------------------------------------------------- #
+
+
+def get_skill(skill: str) -> Document:
+    path = skills_dir() / f"{skill}.md"
+    if not path.is_file():
+        raise ToolError(
+            f"Unknown skill '{skill}'. Known skills : {_known(skills_dir().glob('*.md'))}. "
+            "Create it first with create_skills."
+        )
+    return vault.read(path)
+
+
+def iter_skills(user: str) -> Iterator[Document]:
+    for path in sorted(skills_dir().glob("*.md")):
+        document = vault.read(path)
+        if vault.unlink(document.metadata.get("user", "")) == user:
+            yield document
+
+
 # --------------------------------------------------------------------------- #
 # Courses
 # --------------------------------------------------------------------------- #
@@ -119,8 +153,9 @@ def last_activity(document: Document) -> Optional[datetime]:
     return vault.parse_time(metadata.get("updated_at")) or vault.parse_time(metadata.get("created_at"))
 
 
-def declared_skills(course: Document) -> list[str]:
-    return [str(skill.get("name")) for skill in course.metadata.get("skills") or [] if isinstance(skill, dict)]
+def course_skills(course: Document) -> list[str]:
+    """The slugs of the skills a course evaluates, in the order they were declared."""
+    return [vault.unlink(skill) for skill in course.metadata.get("skills") or [] if isinstance(skill, str)]
 
 
 # --------------------------------------------------------------------------- #
@@ -212,11 +247,13 @@ def iter_exams(course: str) -> Iterator[Document]:
     yield from iter_documents(course, "exams")
 
 
-def mark_history(course: str) -> dict[str, list[int]]:
-    """Marks of each skill, in chronological order of the exams."""
+def mark_history(user: str) -> dict[str, list[int]]:
+    """Marks of each skill of a user, in chronological order of the exams of all their courses : a skill shared by several courses has one history."""
+    exams = [exam for course in iter_courses(user) for exam in iter_exams(course_slug(course))]
+    exams.sort(key=lambda document: (vault.parse_time(document.metadata.get("created_at")) or datetime.min, document.slug))
     history: dict[str, list[int]] = {}
-    for exam in iter_exams(course):
+    for exam in exams:
         for evaluation in exam.metadata.get("skills") or []:
             if isinstance(evaluation, dict) and isinstance(evaluation.get("mark"), int):
-                history.setdefault(str(evaluation.get("name")), []).append(evaluation["mark"])
+                history.setdefault(vault.unlink(evaluation.get("skill", "")), []).append(evaluation["mark"])
     return history

@@ -7,7 +7,7 @@ An exam file looks like this :
     *How to answer*
 
     ## ❓ Question 1 · Single choice
-    *Skill : convolution*
+    *Skill : [[convolution]]*
 
     The question
 
@@ -15,7 +15,7 @@ An exam file looks like this :
     - [x] **B.** Second option        <- ticked by the student
 
     ## ❓ Question 2 · Open question
-    *Skill : convolution*
+    *Skills : [[convolution]], [[cnn-architecture]]*
 
     The question
 
@@ -62,14 +62,15 @@ def validate_questions(questions: list, declared_skills: list[str]) -> tuple[lis
     for number, question in enumerate(questions, start=1):
         where = f"Question {number}"
         if not isinstance(question, dict):
-            raise ToolError(f"{where} must be an object with 'kind', 'text' and 'skill'.")
+            raise ToolError(f"{where} must be an object with 'kind', 'text' and 'skills'.")
         kind = question.get("kind")
         if kind not in KINDS:
             raise ToolError(f"{where} : unknown kind '{kind}'. Use one of : {', '.join(KINDS)}.")
         text = str(question.get("text") or "").strip()
         if not text:
             raise ToolError(f"{where} has no `text`.")
-        skills = question.get("skills", [])
+        raw = question.get("skills") or []
+        skills = list(dict.fromkeys(str(skill).strip() for skill in ([raw] if isinstance(raw, str) else raw) if str(skill).strip()))
         if not skills:
             raise ToolError(
                 f"{where} is associated with no skills. Associate it with at least one skill among : {', '.join(declared_skills)}"
@@ -128,7 +129,9 @@ def render_exam(title: str, intro: str, questions: list[dict]) -> str:
         parts.append(intro.strip())
     parts.append(f"*To answer : {' ; '.join(instructions)}.*")
     for number, question in enumerate(questions, start=1):
-        lines = [f"## ❓ Question {number} · {KINDS[question['kind']]}", f"*Skill : {question['skill']}*", "", question["text"], ""]
+        skills = ", ".join(f"[[{skill}]]" for skill in question["skills"])
+        label = "Skills" if len(question["skills"]) > 1 else "Skill"
+        lines = [f"## ❓ Question {number} · {KINDS[question['kind']]}", f"*{label} : {skills}*", "", question["text"], ""]
         if question["kind"] == "open":
             lines += [ANSWER_MARKER, ""]
         else:
@@ -223,10 +226,14 @@ def grade_closed(answer: Optional[list], solution: list) -> str:
 
 
 def skill_marks(questions: list[dict], outcomes: list[str]) -> dict[str, int]:
-    """Mark of each skill : the average score of its questions (correct 1, incomplete 0.5, wrong 0), out of 100."""
+    """Mark of each skill : the average score of its questions (correct 1, incomplete 0.5, wrong 0), out of 100.
+
+    A question that evaluates several skills counts fully for each of them.
+    """
     scores: dict[str, list[float]] = {}
     for question, outcome in zip(questions, outcomes):
-        scores.setdefault(question["skill"], []).append(SCORES[outcome])
+        for skill in question["skills"]:
+            scores.setdefault(skill, []).append(SCORES[outcome])
     return {skill: round(100 * sum(values) / len(values)) for skill, values in scores.items()}
 
 

@@ -9,16 +9,18 @@ sequenceDiagram
 	participant vault@{ type: "database"} as Obsidian vault
 	
 	user->>teachme : Defines project
-	teachme->>vault : Calls get_project with a name for the described project
+	teachme->>vault : Calls list_projects
   vault-->>teachme : Returns the list of projects, none of which match the description of the project provided by the user
   teachme->>teachme : Thinks deeply about the description of the new project, asking the student to validate each decision.
 	teachme->>vault : Calls create_project to initalize the new project
 	teachme-->>user : Validates the new project
 	user->>teachme : Defines a course
-	teachme->>vault : Calls get_course with a name for the described course
+	teachme->>vault : Calls list_courses
   vault-->>teachme : Returns the list of courses, none of which match the description of the course provided by the user
-  teachme->>teachme : Thinks deeply about the description of the new course, asking the student to validate each decision.
-	teachme->>vault : Calls create_course to initalize the new course, linking it to the defined project
+  teachme->>teachme : Thinks deeply about the description of the new course and its skills, asking the student to validate each decision.
+	teachme->>vault : Calls list_skills, then create_skills with the validated skills
+	vault-->>teachme : Returns the slugs of the skills (existing skills with the same name are reused)
+	teachme->>vault : Calls create_course with the slugs of its skills, linking it to the defined project
 	teachme-->>user : Validates the new course
 	
 	user->>teachme : Asks to start the course
@@ -26,7 +28,7 @@ sequenceDiagram
 	teachme->>user : Teaches
 ```
 
-We always start by creating the project, then only do we create the course, because the content of the course must adapt to the projects, not the other way around. The order matters a lot, even if it confuses your student. Always start by defining the project(s), then the course(s)
+We always start by creating the project, then the skills, then only do we create the course, because the content of the course must adapt to the projects, not the other way around. The order matters a lot, even if it confuses your student. Always start by defining the project(s), then the skills, then the course(s).
 
 ## Initializing a project
 
@@ -83,4 +85,7 @@ As you can see in that example, the 2.x and 3.x skills imply using the skills de
 - Can the student build their projects if they have validated all their skills ?
 - Will the student need to validate most of their skills to build their projects ?
 
-Once you have gathered all these info, call `create_course`.
+Once you have gathered all these info :
+1. call `list_skills` : the student may already have some of these skills from another course. Reuse them, so that their marks follow the student from one course to the next.
+2. call `create_skills` with the validated skills. It returns their slugs, and reuses the skills the student already has with the same name.
+3. call `create_course` with these slugs. Exams can only evaluate the skills of the course, and refer to them by their slugs.

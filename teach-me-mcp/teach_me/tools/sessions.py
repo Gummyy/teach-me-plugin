@@ -38,9 +38,9 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
     result.update({"user": profile, "preferences": preferences, "courses": list_courses(user)})
     if course is None:
         if result["courses"]:
-            step = "Identify the course the student wants to continue in `courses`, then call start_session again with `course`. To start a new one, follow 'Initializing a course' in the skill."
+            step = "Identify the course the student wants to continue in `courses`, then call start_session again with `course`. To start a new one, follow 'Initializing a course or a project' in the skill : project, then skills, then course."
         else:
-            step = "The student has no course yet : follow 'Initializing a course' in the skill."
+            step = "The student has no course yet : follow 'Initializing a course or a project' in the skill : project, then skills, then course."
         return {**result, "next_step": step}
 
     document = objects.get_course(course)

@@ -6,15 +6,16 @@ An exam is a list of questions of 3 kinds :
 - **open** : the student writes the answer (an explanation, a formula, code, a diagram, ...).
 
 You are autonomous when it comes to writing the questions. Keep in mind the skills that you are trying to evaluate and the projects on which the student is going to use them.
-Each question may evaluate multiple skills of the course, and comes with its solution (`correct_options` or `expected_answer`), which the tools keep hidden from the student. The tools write the exam file, grade the closed questions and compute the marks for them, but you are responsible for evaluating the open questions with the `correct_exam` tool !
+Each question may evaluate multiple skills of the course (given by their slugs, as in `get_course_state`), and comes with its solution (`correct_options` or `expected_answer`), which the tools keep hidden from the student. The outcome of a question counts for each of its skills. The tools write the exam file, grade the closed questions and compute the marks, but you are responsible for grading the open questions with the `grade_open_questions` tool !
 
 Every exercise follows the same cycle :
 1. Write the questions and call `create_exam` (for a project exercise, with the project it builds towards).
 2. Let the student answer, where the interface makes it easiest (see [Adapt to the interface](#adapt-to-the-interface)) :
    - **in the chat** (app or browser) : ask the questions in the chat, with an interactive question tool when you have one (single choice for `single`, multiple selection for `multiple`). Never reveal a solution before the student has answered every question.
    - **in the vault** (terminal) : give the student the path of the exam file, ask them to tick their options and to write their open answers there, and to tell you when they're done. Then pull their results from github (they will always push on main) to retrieve the filled exam and call `read_exam`, which returns their answers and the solutions.
-3. Call `correct_exam` with an explanation for each question and the outcome of each open question. If the student answered in the chat, also give their answers in `answers` : the tool writes them into the exam file. The correction is appended below the exam, which is never rewritten.
-4. Share the result in the chat, briefly : what went well, what to review.
+3. Grade every open question with `grade_open_questions` : its outcome and an explanation. You can grade them in several calls (e.g. question by question for a long project exam), and grading a question again replaces its grade.
+4. Call `correct_exam` with an explanation for each closed question. If the student answered in the chat, also give their answers in `answers` : the tool writes them into the exam file. It refuses to correct while an open question is ungraded. The correction is appended below the exam, which is never rewritten.
+5. Share the result in the chat, briefly : what went well, what to review.
 
 ## Quizzes
 
@@ -57,7 +58,7 @@ They are always `open` questions which represent a real milestone in the project
 ## Difficulty
 
 
-The target is about 70% of correct answers, 25% of incomplete answers and less than 5% of wrong answers. The tools evaluate the close questions on its own, but you have to evaluate the open questions yourself. After each exam, based on the results of the student, the course state's `progress.advice` (returned by `start_session` and `get_course_state`) says whether to keep, raise or lower the difficulty, and when a failed exam needs a re-explanation first. Follow it.
+The target is about 70% of correct answers, 10% of incomplete answers and less than 10% of wrong answers. The tools evaluate the close questions on its own, but you have to evaluate the open questions yourself. After each exam, based on the results of the student, the course state's `progress.advice` (returned by `start_session` and `get_course_state`) says whether to keep, raise or lower the difficulty, and when a failed exam needs a re-explanation first. Follow it.
 
 A perfect test must feel like this for the student :
 - 45% very simple questions where I just have to remember definitions
