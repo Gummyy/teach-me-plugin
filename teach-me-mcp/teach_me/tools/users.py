@@ -49,7 +49,7 @@ def merge(current: Optional[dict], changes: dict) -> dict:
 
 
 def _user_activity(user: Document):
-    activities = [objects.last_activity(course) for course in objects.iter_courses(user.slug)]
+    activities = [objects.last_activity(course) for course in objects.iter_courses(objects.slug(user))]
     activities = [moment for moment in activities if moment is not None]
     return max(activities) if activities else vault.parse_time(user.metadata.get("created_at"))
 
@@ -65,8 +65,8 @@ def list_users() -> list[dict]:
         activity = _user_activity(user)
         users.append(
             {
-                "slug": user.slug,
-                "name": str(user.metadata.get("name") or user.slug),
+                "slug": objects.slug(user),
+                "name": str(user.metadata.get("name") or objects.slug(user)),
                 "last_activity": vault.format_time(activity) if activity else None,
             }
         )
@@ -94,9 +94,9 @@ def create_user(
     name = (name or "").strip()
     if len(name) < MIN_USERNAME_LENGTH:
         raise ToolError(f"The name '{name}' is too short : it needs at least {MIN_USERNAME_LENGTH} characters.")
-    slug = vault.unique_slug(vault.slugify(name), lambda s: (objects.users_dir() / f"{s}.md").exists())
+    slug = vault.unique_slug(vault.slugify(name), lambda s: objects.user_file(s).exists())
     document = Document(
-        objects.users_dir() / f"{slug}.md",
+        objects.user_file(slug),
         {
             "name": name,
             "created_at": vault.format_time(vault.now()),
@@ -176,8 +176,8 @@ def get_user(user: str) -> dict:
     document = objects.get_user(user)
     metadata = document.metadata
     return {
-        "slug": document.slug,
-        "name": str(metadata.get("name") or document.slug),
+        "slug": user,
+        "name": str(metadata.get("name") or user),
         "description": document.body,
         "preferences": metadata.get("preferences") or {},
         "interface_preferences": metadata.get("interface_preferences") or {},

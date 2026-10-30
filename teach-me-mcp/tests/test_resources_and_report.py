@@ -2,7 +2,16 @@ import pytest
 
 from teach_me.database import objects
 from teach_me.errors import ToolError
-from teach_me.tools import correct_exam, create_exam, get_course_state, report_card, share_resource, update_resource
+from teach_me.tools import (
+    correct_exam,
+    create_exam,
+    get_course_state,
+    grade_questions,
+    report_card,
+    share_resource,
+    submit_answers,
+    update_resource,
+)
 
 
 def test_share_and_update_resource(course):
@@ -51,9 +60,11 @@ def test_report_card(course, vault):
 
     question = {"kind": "single", "text": "?", "skills": ["convolution"], "options": ["Yes", "No"], "correct_options": ["A"]}
     slug = create_exam(course, "Quiz | 1", "quiz", [question, question])["slug"]
-    correct_exam(slug, [{"question": 1, "explanation": "."}, {"question": 2, "explanation": "."}], answers=["A", "B"])
+    submit_answers(slug, ["A", "B"])
+    grade_questions(slug, [{"question": 1, "explanation": "."}, {"question": 2, "explanation": "."}])
+    correct_exam(slug)
     card = report_card(course)
-    assert "**1/2** skills evaluated, average of the latest marks : **50/100**" in card
-    assert "| [[convolution\\|convolution]] | Computes and interprets a 2D convolution | 50 | 50 |" in card
-    assert f"[[{slug}\\|Quiz \\| 1]]" in card  # pipes are escaped in tables
-    assert (vault / "courses" / course / "report_card.md").is_file()
+    assert "**1/2** skills evaluated, average grade : **B** (3.0/5)" in card  # A and D
+    assert "| [[skill-convolution\\|convolution]] | Computes and interprets a 2D convolution | B (3.0/5) | B |" in card
+    assert "[[quiz-quiz-1\\|Quiz / 1]]" in card  # an alias can't contain a pipe, and the link's pipe is escaped in tables
+    assert (vault / "courses" / course / "report-card-computer-vision.md").is_file()

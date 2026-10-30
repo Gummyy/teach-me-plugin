@@ -24,9 +24,11 @@ from teach_me.tools import (
 def test_create_course(course, vault):
     assert course == "computer-vision"
     document = objects.get_course(course)
-    assert document.metadata["user"] == "[[alice]]"
-    assert document.metadata["projects"] == ["[[pet-classifier]]"]
-    assert document.metadata["skills"] == ["[[convolution]]", "[[cnn-architecture]]"]
+    assert document.path == vault / "courses" / "computer-vision" / "course-computer-vision.md"
+    assert document.metadata["user"] == "[[user-alice]]"
+    assert document.metadata["projects"] == ["[[project-pet-classifier]]"]
+    assert document.metadata["skills"] == ["[[skill-convolution]]", "[[skill-cnn-architecture]]"]
+    assert document.body.startswith("## Content") and document.body.index("## Content") < document.body.index("- Course created")
     assert len(objects.parse_sessions(document.body)) == 1
 
 
@@ -92,17 +94,18 @@ def test_new_session_after_inactivity(course):
 
 def test_save_class(course, vault):
     path = save_class(course, "Convolution", "Definition and kernels", "# Convolution\n\nContent")
-    assert path.startswith("courses/computer-vision/classes/") and path.endswith("-convolution.md")
+    assert path == "courses/computer-vision/classes/class-convolution.md"
     document = vault_io.read(vault / path)
     assert document.metadata["title"] == "Convolution"
     assert document.body == "# Convolution\n\nContent"
-    assert "Class [[" in get_course_state(course)["sessions"][0]["entries"]
+    assert "Class [[class-convolution|Convolution]]" in get_course_state(course)["sessions"][0]["entries"]
+    assert "1. Class : [[class-convolution|Convolution]]" in objects.get_course(course).body
 
 
 def test_same_class_title_gets_a_new_slug(course):
     first = save_class(course, "Convolution", "", "Content")
     second = save_class(course, "Convolution", "", "Content")
-    assert first != second and second.endswith("-convolution-2.md")
+    assert first != second and second.endswith("/class-convolution-2.md")
 
 
 def test_update_project_keeps_its_history(course):
@@ -138,7 +141,7 @@ def test_start_session_merges_the_preferences_of_the_interface(vault):
     assert start_session("terminal")["preferences"] == {"tone": "casual", "quizzes": "in the vault"}
     assert start_session("app")["preferences"] == {"tone": "casual", "quizzes": "anywhere"}
     assert "no course yet" in start_session("app")["next_step"]
-    vault_empty = vault / "users" / "alice.md"
+    vault_empty = vault / "users" / "user-alice.md"
     assert vault_empty.is_file()
 
 

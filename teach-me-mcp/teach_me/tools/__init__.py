@@ -6,7 +6,7 @@ descriptions and the input schemas that the model reads.
 """
 
 from teach_me.tools.courses import create_course, get_course_state, list_courses
-from teach_me.tools.exams import correct_exam, create_exam, grade_open_questions, read_exam
+from teach_me.tools.exams import correct_exam, create_exam, grade_questions, read_exam, submit_answers
 from teach_me.tools.project import create_project, list_projects, update_project
 from teach_me.tools.report import report_card
 from teach_me.tools.resources import share_resource, update_resource
@@ -32,8 +32,9 @@ ALL_TOOLS = [
     log_session,
     save_class,
     create_exam,
+    submit_answers,
     read_exam,
-    grade_open_questions,
+    grade_questions,
     correct_exam,
     share_resource,
     update_resource,

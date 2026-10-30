@@ -20,7 +20,7 @@ def _summary(document: Document) -> dict:
     description, progress = _split_project(document.body)
     entries = [line[2:] for line in progress.splitlines() if line.startswith("- ")]
     return {
-        "slug": document.slug,
+        "slug": objects.slug(document),
         "name": document.metadata.get("name"),
         "description": description,
         "last_progress": entries[-3:],
@@ -45,10 +45,10 @@ def create_project(user: str, name: str, description: str) -> str:
     objects.get_user(user)
     if not (name or "").strip():
         raise ToolError("The project needs a non empty `name`.")
-    slug = vault.unique_slug(vault.slugify(name), lambda s: (objects.projects_dir() / f"{s}.md").exists())
+    slug = vault.unique_slug(vault.slugify(name), lambda s: objects.project_file(s).exists())
     document = Document(
-        objects.projects_dir() / f"{slug}.md",
-        {"name": name.strip(), "user": vault.link(user), "created_at": vault.format_time(vault.now())},
+        objects.project_file(slug),
+        {"name": name.strip(), "user": objects.link("user", user, objects.user_file(user)), "created_at": vault.format_time(vault.now())},
         (description or "").strip(),
     )
     vault.write(document)

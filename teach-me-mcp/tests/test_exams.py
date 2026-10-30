@@ -5,7 +5,7 @@ import pytest
 from teach_me.database import objects
 from teach_me.database import vault as vault_io
 from teach_me.errors import ToolError
-from teach_me.tools import correct_exam, create_exam, get_course_state, grade_open_questions, read_exam, save_class
+from teach_me.tools import correct_exam, create_exam, get_course_state, grade_questions, read_exam, save_class, submit_answers
 
 SINGLE = {
     "kind": "single",
@@ -27,12 +27,15 @@ OPEN = {
     "skills": ["cnn-architecture"],
     "expected_answer": "Convolutions + pooling, then a dense layer with 2 outputs.",
 }
-EXPLAIN = [{"question": 1, "explanation": "Because."}, {"question": 2, "explanation": "Both are neutral."}]
-GRADE = {"question": 3, "outcome": "incomplete", "explanation": "Pooling was missing."}
+GRADES = [
+    {"question": 1, "explanation": "Because."},
+    {"question": 2, "explanation": "Both are neutral."},
+    {"question": 3, "grade": "B", "explanation": "Pooling was missing."},
+]
 
 
-def _create(course, questions=(SINGLE, MULTIPLE, OPEN), **kwargs):
-    return create_exam(course, "Convolution quiz", "quiz", list(questions), **kwargs)
+def _create(course, questions=(SINGLE, MULTIPLE, OPEN), title="Convolution quiz", type="quiz", **kwargs):
+    return create_exam(course, title, type, list(questions), **kwargs)
 
 
 def _fill(vault, path, old, new):
@@ -40,24 +43,41 @@ def _fill(vault, path, old, new):
     file.write_text(file.read_text(encoding="utf-8").replace(old, new, 1), encoding="utf-8")
 
 
+def _correct(slug, answers, grades=GRADES, **kwargs):
+    submit_answers(slug, answers)
+    grade_questions(slug, grades)
+    return correct_exam(slug, **kwargs)
+
+
 def test_create_exam_renders_the_questions_and_hides_the_solutions(course, vault):
-    exam = _create(course, intro="A quick check.", project="pet-classifier")
-    assert exam["questions"] == 3
+    exam = _create(course, intro="A quick check.")
+    assert exam == {"slug": "convolution-quiz", "path": "courses/computer-vision/exams/quiz-convolution-quiz.md", "questions": 3}
     document = vault_io.read(vault / exam["path"])
     assert document.metadata["status"] == "assigned"
-    assert document.metadata["project"] == "[[pet-classifier]]"
     assert document.metadata["skills"] == [
-        {"skill": "[[convolution]]", "mark": None, "comment": None},
-        {"skill": "[[cnn-architecture]]", "mark": None, "comment": None},
+        {"skill": "[[skill-convolution|convolution]]", "grade": None, "score": None, "comment": None},
+        {"skill": "[[skill-cnn-architecture|cnn-architecture]]", "grade": None, "score": None, "comment": None},
     ]
     assert document.metadata["questions"][0] == {"kind": "single", "skills": ["convolution"], "options": ["Convolution", "Cross-correlation"]}
-    assert "## ❓ Question 1 · Single choice\n*Skill : [[convolution]]*" in document.body
+    assert "## ❓ Question 1 · Single choice\n*Skill : [[skill-convolution|convolution]]*" in document.body
     assert "- [ ] **B.** Cross-correlation" in document.body
     assert "## ❓ Question 3 · Open question" in document.body and "**Your answer :**" in document.body
     assert "Pooling" not in document.body and "correct_options" not in json.dumps(document.metadata)  # no solution in the exam
-    solutions = json.loads((vault / ".teach-me" / "solutions" / f"{exam['slug']}.json").read_text(encoding="utf-8"))
+    solutions = json.loads((vault / ".teach-me" / "solutions" / "convolution-quiz.json").read_text(encoding="utf-8"))
     assert solutions == [["A"], ["A", "B"], OPEN["expected_answer"]]
-    assert get_course_state(course)["pending_exams"][0]["slug"] == exam["slug"]
+    state = get_course_state(course)
+    assert state["pending_exams"][0]["slug"] == "convolution-quiz"
+    assert "1. Quiz : [[quiz-convolution-quiz|Convolution quiz]]" in objects.get_course(course).body
+
+
+def test_exam_slugs_are_unique_across_quizzes_and_project_exams(course, vault):
+    _create(course)
+    exercise = _create(course, [OPEN], type="project", project="pet-classifier")
+    assert exercise["slug"] == "convolution-quiz-2" and exercise["path"].endswith("/exams/exercise-convolution-quiz-2.md")
+    assert vault_io.read(vault / exercise["path"]).metadata["project"] == "[[project-pet-classifier]]"
+    assert "2. Exercise : [[exercise-convolution-quiz-2|Convolution quiz]]" in objects.get_course(course).body
+    with pytest.raises(ToolError, match="Unknown project 'nope'"):
+        _create(course, [OPEN], type="project", project="nope")
 
 
 @pytest.mark.parametrize(
@@ -87,130 +107,144 @@ def test_answers_written_in_the_file(course, vault):
     assert read["status"] == "filled"
     assert read["answers"] == [["A"], ["A"], "Two convolutions and a dense layer."]
     assert read["solutions"][1] == ["A", "B"]
+    assert read["proposed_grades"] == ["A", "B", None]  # F1 of {A} against {A, B} : 2/3
 
-    assert grade_open_questions(exam["slug"], [GRADE]) == {"graded": [3], "ungraded": []}
-    result = correct_exam(exam["slug"], EXPLAIN, comments={"convolution": "Forgot one neutral kernel"})
-    assert result["outcomes"] == ["correct", "incomplete", "incomplete"]  # closed questions graded by the server
-    assert result["marks"] == {"convolution": 75, "cnn-architecture": 50}
-    assert (result["correct"], result["incomplete"], result["wrong"]) == (0.33, 0.67, 0.0)
+    graded = grade_questions(exam["slug"], GRADES)
+    assert graded == {"graded": [{"question": 1, "grade": "A"}, {"question": 2, "grade": "B"}, {"question": 3, "grade": "B"}], "ungraded": []}
+    result = correct_exam(exam["slug"], comments={"convolution": "Forgot one neutral kernel"})
+    assert result["grades"] == ["A", "B", "B"]
+    assert result["skills"] == {"convolution": {"grade": "A", "score": 4.5}, "cnn-architecture": {"grade": "B", "score": 4.0}}
+    assert result["mean"] == 4.33 and result["shares"]["B"] == 0.67
 
     document = vault_io.read(vault / exam["path"])
     assert document.metadata["status"] == "corrected"
-    assert document.metadata["skills"][0] == {"skill": "[[convolution]]", "mark": 75, "comment": "Forgot one neutral kernel"}
-    assert [q["outcome"] for q in document.metadata["questions"]] == result["outcomes"]
+    assert document.metadata["skills"][0] == {"skill": "[[skill-convolution|convolution]]", "grade": "A", "score": 4.5, "comment": "Forgot one neutral kernel"}
+    assert [q["grade"] for q in document.metadata["questions"]] == result["grades"]
     body = document.body
     assert body.index("## ❓ Question 1") < body.index("## ✅ Correction")  # the exam is kept, the correction comes after
-    assert "Two convolutions and a dense layer." in body
-    assert "> [!Warning] Question 2 : Incomplete answer" in body and "**Solution :** A, B" in body
-    assert "Pooling was missing." in body
+    assert "Two convolutions and a dense layer." in body and "Pooling was missing." in body
+    assert "> [!Tip] Question 2 : B · The answer solves the main problems" in body and "**Solution :** A, B" in body
     state = get_course_state(course)
-    assert {s["slug"]: s["latest_mark"] for s in state["skills"]} == {"convolution": 75, "cnn-architecture": 50}
-    assert "corrected : 1 correct, 2 incomplete, 0 wrong" in state["sessions"][0]["entries"]
+    assert {s["slug"]: s["grade"] for s in state["skills"]} == {"convolution": "A", "cnn-architecture": "B"}
+    assert "corrected : 1 A, 2 B (mean 4.33/5)" in state["sessions"][0]["entries"]
 
 
-def test_answers_given_in_the_chat_are_written_into_the_file(course, vault):
+def test_answers_given_in_the_chat(course, vault):
     exam = _create(course)
-    grade_open_questions(exam["slug"], [GRADE])
-    result = correct_exam(exam["slug"], EXPLAIN, answers=["b", "A, B", "Some convolutions."])
-    assert result["outcomes"] == ["wrong", "correct", "incomplete"]
+    submitted = submit_answers(exam["slug"], ["b", "A, B", "Some convolutions."])
+    assert submitted["status"] == "filled" and submitted["proposed_grades"] == ["D", "A", None]
     body = vault_io.read(vault / exam["path"]).body
     assert "- [x] **B.** Cross-correlation" in body and "- [ ] **A.** Convolution" in body
-    assert "- [x] **A.** 1x1" in body and "- [x] **B.** 3x3" in body
-    assert body.index("Some convolutions.") < body.index("## ✅ Correction")
+    assert "- [x] **A.** 1x1" in body and "- [x] **B.** 3x3" in body and "Some convolutions." in body
+    grade_questions(exam["slug"], [*GRADES[:2], {**GRADES[2], "grade": "C"}])
+    assert correct_exam(exam["slug"])["grades"] == ["D", "A", "C"]
+
+
+def test_the_model_can_change_a_proposed_grade_but_not_an_e(course):
+    exam = _create(course)
+    submit_answers(exam["slug"], ["A", "", ""])
+    graded = grade_questions(exam["slug"], [{**GRADES[0], "grade": "B"}, {**GRADES[1], "grade": "A"}, {**GRADES[2], "grade": "A"}])
+    assert [item["grade"] for item in graded["graded"]] == ["B", "E", "E"]  # unanswered : always E
 
 
 def test_a_question_counts_for_each_of_its_skills(course):
     both = {**OPEN, "skills": ["convolution", "cnn-architecture"]}
     exam = _create(course, [SINGLE, both])
-    grade_open_questions(exam["slug"], [{"question": 2, "outcome": "wrong", "explanation": "No pooling, no convolution."}])
-    result = correct_exam(exam["slug"], EXPLAIN[:1], answers=["A", "Dense layers only."])
-    assert result["marks"] == {"convolution": 50, "cnn-architecture": 0}
+    result = _correct(exam["slug"], ["A", "Dense layers only."], [GRADES[0], {"question": 2, "grade": "D", "explanation": "No convolution."}])
+    assert result["skills"] == {"convolution": {"grade": "B", "score": 3.0}, "cnn-architecture": {"grade": "D", "score": 1.0}}
 
 
-def test_open_questions_are_graded_before_the_correction(course, vault):
+def test_questions_are_graded_before_the_correction(course, vault):
     first, second = {**OPEN, "text": "First"}, {**OPEN, "text": "Second"}
     slug = _create(course, [first, second])["slug"]
-    with pytest.raises(ToolError, match=r"open question\(s\) 1, 2 with grade_open_questions"):
-        correct_exam(slug, answers=["a", "b"])
-    assert grade_open_questions(slug, [{**GRADE, "question": 1}]) == {"graded": [1], "ungraded": [2]}
-    assert grade_open_questions(slug, [{**GRADE, "question": 2, "outcome": "wrong"}])["ungraded"] == []
-    assert grade_open_questions(slug, [{**GRADE, "question": 2, "outcome": "correct"}])["graded"] == [1, 2]  # grading again replaces
-    assert correct_exam(slug, answers=["a", "b"])["outcomes"] == ["incomplete", "correct"]
+    with pytest.raises(ToolError, match="no answer yet.*submit_answers"):
+        grade_questions(slug, [{**GRADES[2], "question": 1}])
+    submit_answers(slug, ["a", "b"])
+    with pytest.raises(ToolError, match=r"question\(s\) 1, 2 with grade_questions"):
+        correct_exam(slug)
+    assert grade_questions(slug, [{**GRADES[2], "question": 1}])["ungraded"] == [2]
+    grade_questions(slug, [{**GRADES[2], "question": 2, "grade": "D"}])
+    assert grade_questions(slug, [{**GRADES[2], "question": 2, "grade": "A"}])["ungraded"] == []  # grading again replaces
+    assert correct_exam(slug)["grades"] == ["B", "A"]
     assert not (vault / ".teach-me" / "grades" / f"{slug}.json").exists()  # a retake is graded again
-    with pytest.raises(ToolError, match="grade_open_questions first"):
-        correct_exam(slug, answers=["a", "b"])
+    with pytest.raises(ToolError, match="grade_questions first"):
+        correct_exam(slug)
+
+
+def test_submitting_again_drops_the_grades(course):
+    slug = _create(course, [OPEN])["slug"]
+    submit_answers(slug, ["a"])
+    grade_questions(slug, [{**GRADES[2], "question": 1}])
+    submit_answers(slug, ["b"])
+    assert read_exam(slug)["grades"] == []
 
 
 def test_grades_check_their_arguments(course):
     slug = _create(course)["slug"]
+    submit_answers(slug, ["A", "A", "text"])
     with pytest.raises(ToolError, match="from 1 to 3"):
-        grade_open_questions(slug, [{**GRADE, "question": 4}])
-    with pytest.raises(ToolError, match="closed question"):
-        grade_open_questions(slug, [{**GRADE, "question": 1}])
-    with pytest.raises(ToolError, match="needs an `outcome`"):
-        grade_open_questions(slug, [{**GRADE, "outcome": "perfect"}])
+        grade_questions(slug, [{**GRADES[0], "question": 4}])
     with pytest.raises(ToolError, match="has no `explanation`"):
-        grade_open_questions(slug, [{**GRADE, "explanation": ""}])
+        grade_questions(slug, [{**GRADES[0], "explanation": ""}])
+    with pytest.raises(ToolError, match="needs a `grade`"):
+        grade_questions(slug, [{"question": 3, "explanation": "No grade"}])
+    with pytest.raises(ToolError, match="needs a `grade`"):
+        grade_questions(slug, [{**GRADES[0], "grade": "F"}])
 
 
-def test_correction_needs_the_answers(course):
-    exam = _create(course)
-    grade_open_questions(exam["slug"], [GRADE])
-    with pytest.raises(ToolError, match="give their answers in `answers`"):
-        correct_exam(exam["slug"], EXPLAIN)
-
-
-def test_correction_checks_its_arguments(course):
+def test_answers_and_comments_are_checked(course):
     slug = _create(course)["slug"]
-    grade_open_questions(slug, [GRADE])
-    answers = ["A", "A", "text"]
-    with pytest.raises(ToolError, match=r"missing question\(s\) 2"):
-        correct_exam(slug, EXPLAIN[:1], answers=answers)
-    with pytest.raises(ToolError, match="is an open question"):
-        correct_exam(slug, [*EXPLAIN, {"question": 3, "explanation": "?"}], answers=answers)
-    with pytest.raises(ToolError, match="has no `explanation`"):
-        correct_exam(slug, [EXPLAIN[0], {"question": 2, "explanation": ""}], answers=answers)
     with pytest.raises(ToolError, match="one answer per question"):
-        correct_exam(slug, EXPLAIN, answers=["A"])
+        submit_answers(slug, ["A"])
     with pytest.raises(ToolError, match="unknown options Z"):
-        correct_exam(slug, EXPLAIN, answers=["Z", "A", "text"])
+        submit_answers(slug, ["Z", "A", "text"])
     with pytest.raises(ToolError, match="doesn't evaluate : nope"):
-        correct_exam(slug, EXPLAIN, answers=answers, comments={"nope": "?"})
+        _correct(slug, ["A", "A", "text"], comments={"nope": "?"})
 
 
 def test_a_second_correction_never_removes_the_first_one(course, vault):
     exam = _create(course, [SINGLE])
-    correct_exam(exam["slug"], [{"question": 1, "explanation": "First correction"}], answers=["B"])
-    correct_exam(exam["slug"], [{"question": 1, "explanation": "After the retake"}], answers=["A"])
+    _correct(exam["slug"], ["B"], [{"question": 1, "explanation": "First correction"}])
+    _correct(exam["slug"], ["A"], [{"question": 1, "explanation": "After the retake"}])
     body = vault_io.read(vault / exam["path"]).body
     assert body.count("## ✅ Correction (") == 2
     assert body.index("First correction") < body.index("After the retake")
-    assert objects.mark_history("alice") == {"convolution": [100]}  # one exam, its latest mark
+    assert objects.skill_grades("alice") == {"convolution": {"grade": "A", "score": 5.0, "history": ["A"]}}  # only the latest take counts
 
 
-def test_latest_mark_follows_the_exams(course):
-    first = _create(course, [SINGLE])["slug"]
-    second = _create(course, [SINGLE])["slug"]
-    correct_exam(first, EXPLAIN[:1], answers=["B"])
-    correct_exam(second, EXPLAIN[:1], answers=["A"])
-    assert objects.mark_history("alice") == {"convolution": [0, 100]}
+def test_project_exams_weigh_twice_a_quiz(course):
+    quiz = _create(course, [SINGLE])["slug"]
+    exercise = _create(course, [SINGLE], title="Exercise", type="project")["slug"]
+    _correct(quiz, ["B"], GRADES[:1])  # D : 1
+    _correct(exercise, ["A"], GRADES[:1])  # A : 5, twice
+    assert objects.skill_grades("alice")["convolution"] == {"grade": "B", "score": 3.67, "history": ["D", "A"]}
 
 
 def test_progress_advice(course):
     assert get_course_state(course)["progress"]["advice"] == []
-    save_class(course, "Convolution", "", "Content")
-    save_class(course, "Kernels", "", "Content")
+    for title in ("Convolution", "Kernels", "Padding"):
+        save_class(course, title, "", "Content")
     progress = get_course_state(course)["progress"]
-    assert progress["classes_since_last_exam"] == 2
+    assert progress["classes_since_last_exam"] == 3
     assert "propose an exercise" in progress["advice"][0]
 
     slug = _create(course, [SINGLE, MULTIPLE])["slug"]
     assert "waiting for an answer" in get_course_state(course)["progress"]["advice"][0]
-    correct_exam(slug, EXPLAIN, answers=["B", "C"])
+    _correct(slug, ["B", "C"], GRADES[:2])
     progress = get_course_state(course)["progress"]
     assert progress["classes_since_last_exam"] == 0
-    assert progress["last_corrected_exam"]["wrong"] == 1.0
+    assert progress["last_corrected_exam"]["mean"] == 1.0
     assert "re-explain" in progress["advice"][0]
+
+
+@pytest.mark.parametrize(
+    "answers, advice",
+    [(["A", "A, B"], "too easy"), (["A", "A, C"], "right"), (["A", "C"], "too hard")],
+)
+def test_difficulty_follows_the_mean(course, answers, advice):
+    slug = _create(course, [SINGLE, MULTIPLE])["slug"]
+    _correct(slug, answers, GRADES[:2])  # A A : 5 · A C : 3.5 · A D : 3
+    assert advice in get_course_state(course)["progress"]["advice"][0]
 
 
 def test_unknown_exam(course):

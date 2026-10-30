@@ -31,8 +31,12 @@ def test_unique_slug():
     assert vault.unique_slug("bob", taken.__contains__) == "bob"
 
 
-def test_links():
-    assert vault.link("alice") == "[[alice]]"
+def test_links(tmp_path: Path):
+    note = tmp_path / "user-alice.md"
+    with pytest.raises(vault.LinkError):
+        vault.link(note)
+    note.write_text("", encoding="utf-8")
+    assert vault.link(note) == "[[user-alice]]"
     assert vault.unlink("[[alice|Alice]]") == "alice"
     assert vault.unlink("[[course#2026-10-20 10:30]]") == "course"
     assert vault.unlink("alice") == "alice"

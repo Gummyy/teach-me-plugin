@@ -13,20 +13,20 @@ from teach_me.tools.schemas import SkillDeclaration
 from teach_me.tools.users import _validate_skills
 
 
-def _summary(document: Document, history: dict[str, list[int]]) -> dict:
+def _summary(document: Document, grades: dict[str, dict]) -> dict:
     return {
-        "slug": document.slug,
+        "slug": objects.slug(document),
         "name": document.metadata.get("name"),
         "description": document.body,
-        "latest_mark": (history.get(document.slug) or [None])[-1],
+        **{key: (grades.get(objects.slug(document)) or {}).get(key) for key in ("grade", "score")},
     }
 
 
 def check_skills(user: str, skills: list[str]) -> list[str]:
     """Checks that the skills exist and belong to the user. Returns their slugs, without duplicates."""
-    slugs = list(dict.fromkeys(vault.unlink(skill) for skill in skills))
+    slugs = list(dict.fromkeys(objects.unlink(skill) for skill in skills))
     for skill in slugs:
-        owner = vault.unlink(objects.get_skill(skill).metadata.get("user", ""))
+        owner = objects.unlink(objects.get_skill(skill).metadata.get("user", ""))
         if owner != user:
             raise ToolError(f"The skill '{skill}' belongs to '{owner}', not to '{user}'.")
     return slugs
@@ -47,17 +47,18 @@ def create_skills(user: str, skills: list[SkillDeclaration]) -> list[dict]:
         raise ToolError("Give at least one skill in `skills`.")
     existing = {str(document.metadata.get("name") or "").lower(): document for document in objects.iter_skills(user)}
     moment = vault.format_time(vault.now())
+    user_link = objects.link("user", user, objects.user_file(user))
     created = []
     for skill in _validate_skills(skills, "skills"):
         known = existing.get(skill["name"].lower())
         if known is not None:
-            created.append({"slug": known.slug, "name": known.metadata.get("name"), "reused": True})
+            created.append({"slug": objects.slug(known), "name": known.metadata.get("name"), "reused": True})
             continue
-        slug = vault.unique_slug(vault.slugify(skill["name"]), lambda s: (objects.skills_dir() / f"{s}.md").exists())
+        slug = vault.unique_slug(vault.slugify(skill["name"]), lambda s: objects.skill_file(s).exists())
         vault.write(
             Document(
-                objects.skills_dir() / f"{slug}.md",
-                {"name": skill["name"], "user": vault.link(user), "created_at": moment},
+                objects.skill_file(slug),
+                {"name": skill["name"], "user": user_link, "created_at": moment},
                 skill["description"],
             )
         )
@@ -66,24 +67,24 @@ def create_skills(user: str, skills: list[SkillDeclaration]) -> list[dict]:
 
 
 def list_skills(user: str, course: Optional[str] = None) -> list[dict]:
-    """Lists the skills of a user, or only the ones a course evaluates, with their latest mark (from the exams of all the courses).
+    """Lists the skills of a user, or only the ones a course evaluates, with their grade (from the exams of all the courses).
 
     Args:
         user (str): The slug of the user
         course (Optional[str]): The slug of a course, to list only its skills, in the order of the course. Defaults to None.
 
     Returns:
-        list[dict]: One item per skill : {"slug", "name", "description", "latest_mark"}
+        list[dict]: One item per skill : {"slug", "name", "description", "grade", "score"}. The score is the weighted mean of the grades of its questions (A 5, B 4, C 2, D 1, E 0, a project exam weighing twice a quiz), the grade the closest letter. Both are null for a skill not evaluated yet.
     """
     objects.get_user(user)
-    history = objects.mark_history(user)
+    grades = objects.skill_grades(user)
     if course is None:
-        return [_summary(document, history) for document in objects.iter_skills(user)]
+        return [_summary(document, grades) for document in objects.iter_skills(user)]
     document = objects.get_course(course)
-    owner = vault.unlink(document.metadata.get("user", ""))
+    owner = objects.unlink(document.metadata.get("user", ""))
     if owner != user:
         raise ToolError(f"The course '{course}' belongs to '{owner}', not to '{user}'.")
-    return [_summary(objects.get_skill(skill), history) for skill in objects.course_skills(document)]
+    return [_summary(objects.get_skill(skill), grades) for skill in objects.course_skills(document)]
 
 
 def edit_skill(skill: str, name: Optional[str] = None, description: Optional[str] = None) -> dict:
@@ -95,22 +96,22 @@ def edit_skill(skill: str, name: Optional[str] = None, description: Optional[str
         description (Optional[str]): The new description : one sentence about what the student can do once the skill is validated. Defaults to None.
 
     Returns:
-        dict: {"slug", "name", "description", "latest_mark"} : the skill after the update
+        dict: {"slug", "name", "description", "grade", "score"} : the skill after the update
     """
     document = objects.get_skill(skill)
     if name is None and description is None:
         raise ToolError("Nothing to update : give a new `name` or a new `description`.")
-    user = vault.unlink(document.metadata.get("user", ""))
+    user = objects.unlink(document.metadata.get("user", ""))
     if name is not None:
         name = name.strip()
         if not name:
             raise ToolError("The skill `name` can't be empty.")
         for other in objects.iter_skills(user):
-            if other.slug != skill and str(other.metadata.get("name") or "").lower() == name.lower():
-                raise ToolError(f"'{user}' already has a skill named '{name}' : '{other.slug}'.")
+            if objects.slug(other) != skill and str(other.metadata.get("name") or "").lower() == name.lower():
+                raise ToolError(f"'{user}' already has a skill named '{name}' : '{objects.slug(other)}'.")
         document.metadata["name"] = name
     if description is not None:
         document.body = description.strip()
     document.metadata["updated_at"] = vault.format_time(vault.now())
     vault.write(document)
-    return _summary(document, objects.mark_history(user))
+    return _summary(document, objects.skill_grades(user))

@@ -2,14 +2,14 @@ import pytest
 
 from teach_me.database import objects
 from teach_me.errors import ToolError
-from teach_me.tools import correct_exam, create_course, create_exam, create_skills, create_user, edit_skill, list_skills, report_card
+from teach_me.tools import correct_exam, create_course, create_exam, create_skills, create_user, edit_skill, grade_questions, list_skills, report_card, submit_answers
 
 QUESTION = {"kind": "single", "text": "?", "skills": ["convolution"], "options": ["Yes", "No"], "correct_options": ["A"]}
 
 
 def test_create_skills(course):
     document = objects.get_skill("convolution")
-    assert document.metadata["name"] == "convolution" and document.metadata["user"] == "[[alice]]"
+    assert document.metadata["name"] == "convolution" and document.metadata["user"] == "[[user-alice]]"
     assert document.body == "Computes and interprets a 2D convolution"
     created = create_skills("alice", [{"name": "Pooling", "description": "Downsamples a feature map"}, {"name": "CONVOLUTION", "description": "Other"}])
     assert created == [{"slug": "pooling", "name": "Pooling", "reused": False}, {"slug": "convolution", "name": "convolution", "reused": True}]
@@ -38,7 +38,7 @@ def test_list_skills(course):
 
 def test_edit_skill(course):
     edited = edit_skill("convolution", name="2D convolution", description="Computes a 2D convolution by hand")
-    assert edited == {"slug": "convolution", "name": "2D convolution", "description": "Computes a 2D convolution by hand", "latest_mark": None}
+    assert edited == {"slug": "convolution", "name": "2D convolution", "description": "Computes a 2D convolution by hand", "grade": None, "score": None}
     with pytest.raises(ToolError, match="already has a skill named"):
         edit_skill("convolution", name="CNN-architecture")
     with pytest.raises(ToolError, match="Nothing to update"):
@@ -49,8 +49,10 @@ def test_a_skill_shared_by_two_courses_has_one_history(course):
     second = create_course("alice", "Image processing", "", ["convolution"], name="Image processing")
     first_exam = create_exam(course, "First", "quiz", [QUESTION])["slug"]
     second_exam = create_exam(second, "Second", "quiz", [QUESTION])["slug"]
-    correct_exam(first_exam, [{"question": 1, "explanation": "."}], answers=["B"])
-    correct_exam(second_exam, [{"question": 1, "explanation": "."}], answers=["A"])
-    assert objects.mark_history("alice") == {"convolution": [0, 100]}
-    assert list_skills("alice", course)[0]["latest_mark"] == 100
-    assert "| 100 | 0 → 100 |" in report_card(course)
+    for exam, answer in ((first_exam, "B"), (second_exam, "A")):
+        submit_answers(exam, [answer])
+        grade_questions(exam, [{"question": 1, "explanation": "."}])
+        correct_exam(exam)
+    assert objects.skill_grades("alice") == {"convolution": {"grade": "B", "score": 3.0, "history": ["D", "A"]}}
+    assert list_skills("alice", course)[0]["grade"] == "B"
+    assert "| B (3.0/5) | D → A |" in report_card(course)

@@ -105,9 +105,23 @@ def unique_slug(base: str, exists) -> str:
     return slug
 
 
-def link(slug: str) -> str:
-    """Obsidian link to a note."""
-    return f"[[{slug}]]"
+class LinkError(Exception):
+    """The note targeted by a link doesn't exist."""
+
+    def __init__(self, path: Path):
+        super().__init__(f"No note at {path}")
+        self.path = path
+
+
+def link(path: Path) -> str:
+    """Obsidian link to an existing note. Obsidian finds notes by file name, so file names must be unique in the vault.
+
+    Raises:
+        LinkError: when the note doesn't exist
+    """
+    if not path.is_file():
+        raise LinkError(path)
+    return f"[[{path.stem}]]"
 
 
 def unlink(value: Any) -> str:

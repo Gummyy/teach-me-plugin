@@ -7,7 +7,7 @@ An exam file looks like this :
     *How to answer*
 
     ## ❓ Question 1 · Single choice
-    *Skill : [[convolution]]*
+    *Skill : [[skill-convolution|convolution]]*
 
     The question
 
@@ -15,7 +15,7 @@ An exam file looks like this :
     - [x] **B.** Second option        <- ticked by the student
 
     ## ❓ Question 2 · Open question
-    *Skills : [[convolution]], [[cnn-architecture]]*
+    *Skills : [[skill-convolution|convolution]], [[skill-cnn-architecture|cnn-architecture]]*
 
     The question
 
@@ -36,8 +36,18 @@ from teach_me.errors import ToolError
 
 LETTERS = string.ascii_uppercase
 KINDS = {"open": "Open question", "single": "Single choice", "multiple": "Multiple choices"}
-SCORES = {"correct": 1.0, "incomplete": 0.5, "wrong": 0.0}
-CALLOUTS = {"correct": ("Success", "Correct answer"), "incomplete": ("Warning", "Incomplete answer"), "wrong": ("Failure", "Incorrect answer")}
+GRADES = {
+    "A": {"description": "The answer is correct and solves all the problems raised by the question", "value": 5},
+    "B": {"description": "The answer solves the main problems raised by the question but misses some aspects", "value": 4},
+    "C": {"description": "The answer is incomplete and doesn't solve the main problem raised by the question", "value": 2},
+    "D": {"description": "The solution is wrong and doesn't answer the question", "value": 1},
+    "E": {"description": "No answer was provided", "value": 0},
+}
+GRADE_THRESHOLDS = (("A", 4.5), ("B", 3), ("C", 1.5), ("D", 0.5))
+"""A mean score gets the closest grade : the thresholds are halfway between the values of the grades."""
+F1_THRESHOLDS = (("A", 1), ("B", 2 / 3), ("C", 1 / 3))
+"""Grade proposed for a closed question from the F1-score of the ticked options : below the last threshold, D."""
+CALLOUTS = {"A": "Success", "B": "Tip", "C": "Warning", "D": "Failure", "E": "Failure"}
 ANSWER_MARKER = "**Your answer :**"
 MAX_OPTIONS = 8
 
@@ -118,7 +128,7 @@ def normalize_letters(value, letters: str, where: str) -> list[str]:
 # --------------------------------------------------------------------------- #
 
 
-def render_exam(title: str, intro: str, questions: list[dict]) -> str:
+def render_exam(title: str, intro: str, questions: list[dict], skill_links: dict[str, str]) -> str:
     instructions = []
     if any(question["kind"] != "open" for question in questions):
         instructions.append("tick the box of each answer you choose : `- [x]` (single choice : one box, multiple choices : one or more)")
@@ -129,7 +139,7 @@ def render_exam(title: str, intro: str, questions: list[dict]) -> str:
         parts.append(intro.strip())
     parts.append(f"*To answer : {' ; '.join(instructions)}.*")
     for number, question in enumerate(questions, start=1):
-        skills = ", ".join(f"[[{skill}]]" for skill in question["skills"])
+        skills = ", ".join(skill_links[skill] for skill in question["skills"])
         label = "Skills" if len(question["skills"]) > 1 else "Skill"
         lines = [f"## ❓ Question {number} · {KINDS[question['kind']]}", f"*{label} : {skills}*", "", question["text"], ""]
         if question["kind"] == "open":
@@ -215,26 +225,35 @@ def write_answers(body: str, questions: list[dict], answers: list[Optional[objec
 # --------------------------------------------------------------------------- #
 
 
-def grade_closed(answer: Optional[list], solution: list) -> str:
-    """All the correct options and nothing else : correct. Only correct options, but not all : incomplete. Anything else : wrong."""
+def grade_of(score: float) -> str:
+    """The grade closest to a mean score, between 0 and 5."""
+    return next((grade for grade, threshold in GRADE_THRESHOLDS if score >= threshold), "E")
+
+
+def propose_closed(answer: Optional[list], solution: list) -> str:
+    """Grade proposed for a closed question, from the F1-score of the ticked options against the correct ones. Nothing ticked : E."""
     chosen, correct = set(answer or []), set(solution)
-    if chosen == correct:
-        return "correct"
-    if chosen and chosen < correct:
-        return "incomplete"
-    return "wrong"
+    if not chosen:
+        return "E"
+    right = len(chosen & correct)
+    f1 = 2 * right / (len(chosen) + len(correct))
+    return next((grade for grade, threshold in F1_THRESHOLDS if f1 >= threshold - 1e-9), "D")
 
 
-def skill_marks(questions: list[dict], outcomes: list[str]) -> dict[str, int]:
-    """Mark of each skill : the average score of its questions (correct 1, incomplete 0.5, wrong 0), out of 100.
+def mean_score(grades: list[str]) -> float:
+    return round(sum(GRADES[grade]["value"] for grade in grades) / len(grades), 2)
+
+
+def skill_grades(questions: list[dict], grades: list[str]) -> dict[str, dict]:
+    """Grade of each skill in one exam : {"grade", "score"}, from the mean value of its questions.
 
     A question that evaluates several skills counts fully for each of them.
     """
-    scores: dict[str, list[float]] = {}
-    for question, outcome in zip(questions, outcomes):
+    values: dict[str, list[str]] = {}
+    for question, grade in zip(questions, grades):
         for skill in question["skills"]:
-            scores.setdefault(skill, []).append(SCORES[outcome])
-    return {skill: round(100 * sum(values) / len(values)) for skill, values in scores.items()}
+            values.setdefault(skill, []).append(grade)
+    return {skill: {"grade": grade_of(mean_score(skill_values)), "score": mean_score(skill_values)} for skill, skill_values in values.items()}
 
 
 def _format_answer(question: dict, answer) -> str:
@@ -249,14 +268,14 @@ def _quote(text: str) -> str:
     return "\n".join(f"> {line}" if line.strip() else ">" for line in text.strip().splitlines())
 
 
-def render_correction(label: str, questions: list[dict], answers: list, solutions: list, explanations: list[str], outcomes: list[str]) -> str:
-    counts = {outcome: outcomes.count(outcome) for outcome in SCORES}
-    parts = [f"## ✅ Correction ({label})", f"**{counts['correct']}** correct, **{counts['incomplete']}** incomplete, **{counts['wrong']}** wrong"]
-    for number, (question, answer, solution, explanation, outcome) in enumerate(zip(questions, answers, solutions, explanations, outcomes), start=1):
-        callout, title = CALLOUTS[outcome]
+def render_correction(label: str, questions: list[dict], answers: list, solutions: list, explanations: list[str], grades: list[str]) -> str:
+    counts = ", ".join(f"**{grades.count(grade)}** {grade}" for grade in GRADES if grade in grades)
+    parts = [f"## ✅ Correction ({label})", f"{counts} · mean **{mean_score(grades)}/5**"]
+    for number, (question, answer, solution, explanation, grade) in enumerate(zip(questions, answers, solutions, explanations, grades), start=1):
         if question["kind"] == "open":
             details = f"**Your answer :**\n\n{_format_answer(question, answer)}\n\n**Expected :**\n\n{solution}"
         else:
             details = f"**Your answer :** {_format_answer(question, answer)} · **Solution :** {', '.join(solution)}"
-        parts.append(f"> [!{callout}] Question {number} : {title}\n{_quote(details)}\n>\n{_quote(explanation)}")
+        title = f"Question {number} : {grade} · {GRADES[grade]['description']}"
+        parts.append(f"> [!{CALLOUTS[grade]}] {title}\n{_quote(details)}\n>\n{_quote(explanation)}")
     return "\n\n".join(parts)

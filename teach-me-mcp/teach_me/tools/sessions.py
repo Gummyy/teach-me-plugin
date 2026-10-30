@@ -44,7 +44,7 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
         return {**result, "next_step": step}
 
     document = objects.get_course(course)
-    owner = vault.unlink(document.metadata.get("user", ""))
+    owner = objects.unlink(document.metadata.get("user", ""))
     if owner != user:
         raise ToolError(f"The course '{course}' belongs to '{owner}', not to '{user}'.")
     objects.append_to_session(document, f"Session in the {interface}")
@@ -105,6 +105,8 @@ def save_class(course: str, title: str, summary: str, content: str) -> str:
             content,
         )
     )
-    objects.append_to_session(course_document, f"Class {vault.link(path.stem)} : {title.strip()}")
+    class_link = objects.link("class", objects.slug(path), path, alias=title.strip())
+    objects.add_to_content(course_document, f"Class : {class_link}")
+    objects.append_to_session(course_document, f"Class {class_link}")
     vault.write(course_document)
     return vault.relative(path)

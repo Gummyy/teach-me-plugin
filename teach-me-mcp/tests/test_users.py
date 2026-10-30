@@ -7,7 +7,7 @@ from teach_me.tools import create_user, edit_user, get_user, list_users
 def test_create_and_get_user(vault):
     slug = create_user("Alice", "Likes photography", {"language": "french"})
     assert slug == "alice"
-    assert (vault / "users" / "alice.md").is_file()
+    assert (vault / "users" / "user-alice.md").is_file()
     user = get_user("alice")
     assert user["name"] == "Alice"
     assert user["description"] == "Likes photography"
@@ -65,7 +65,7 @@ def test_interface_preferences(vault):
 
 def test_users_created_before_interface_preferences(vault):
     create_user("Alice")
-    path = vault / "users" / "alice.md"
+    path = vault / "users" / "user-alice.md"
     path.write_text(path.read_text(encoding="utf-8").replace("interface_preferences: {}\n", ""), encoding="utf-8")
     assert get_user("alice")["interface_preferences"] == {}
 

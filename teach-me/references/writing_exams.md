@@ -6,16 +6,30 @@ An exam is a list of questions of 3 kinds :
 - **open** : the student writes the answer (an explanation, a formula, code, a diagram, ...).
 
 You are autonomous when it comes to writing the questions. Keep in mind the skills that you are trying to evaluate and the projects on which the student is going to use them.
-Each question may evaluate multiple skills of the course (given by their slugs, as in `get_course_state`), and comes with its solution (`correct_options` or `expected_answer`), which the tools keep hidden from the student. The outcome of a question counts for each of its skills. The tools write the exam file, grade the closed questions and compute the marks, but you are responsible for grading the open questions with the `grade_open_questions` tool !
+Each question may evaluate multiple skills of the course (given by their slugs, as in `get_course_state`), and comes with its solution (`correct_options` or `expected_answer`), which the tools keep hidden from the student. The grade of a question counts for each of its skills. The tools write the exam file, propose a grade for the closed questions and compute the grades of the skills, but you are responsible for grading every question with the `grade_questions` tool !
+
+Every question gets one of these grades :
+
+| Grade | Value | Meaning |
+| --- | --- | --- |
+| A | 5 | The answer is correct and solves all the problems raised by the question |
+| B | 4 | The answer solves the main problems raised by the question but misses some aspects |
+| C | 2 | The answer is incomplete and doesn't solve the main problem raised by the question |
+| D | 1 | The solution is wrong and doesn't answer the question |
+| E | 0 | No answer was provided (given by the tools, it can't be changed) |
+
+The grade of a skill is the letter closest to the weighted mean of the grades of all its questions, in every exam of every course : a question of a project exam weighs twice a question of a quiz.
 
 Every exercise follows the same cycle :
 1. Write the questions and call `create_exam` (for a project exercise, with the project it builds towards).
 2. Let the student answer, where the interface makes it easiest (see [Adapt to the interface](#adapt-to-the-interface)) :
    - **in the chat** (app or browser) : ask the questions in the chat, with an interactive question tool when you have one (single choice for `single`, multiple selection for `multiple`). Never reveal a solution before the student has answered every question.
    - **in the vault** (terminal) : give the student the path of the exam file, ask them to tick their options and to write their open answers there, and to tell you when they're done. Then pull their results from github (they will always push on main) to retrieve the filled exam and call `read_exam`, which returns their answers and the solutions.
-3. Grade every open question with `grade_open_questions` : its outcome and an explanation. You can grade them in several calls (e.g. question by question for a long project exam), and grading a question again replaces its grade.
-4. Call `correct_exam` with an explanation for each closed question. If the student answered in the chat, also give their answers in `answers` : the tool writes them into the exam file. It refuses to correct while an open question is ungraded. The correction is appended below the exam, which is never rewritten.
-5. Share the result in the chat, briefly : what went well, what to review.
+3. If the student answered in the chat, call `submit_answers` : the tool writes their answers into the exam file.
+4. Call `read_exam` : it returns the answers, the solutions and a proposed grade for each closed question, from the options the student ticked (A for the exact answer, then B, C or D as the answer drifts away from it).
+5. Grade every question with `grade_questions`, with an explanation for each. Give the grade of each open question. For a closed question, leave the grade out to accept the proposal, or change it when the question deserves it. You can grade in several calls (e.g. question by question for a long project exam), and grading a question again replaces its grade.
+6. Call `correct_exam` once every question is graded. The correction is appended below the exam, which is never rewritten.
+7. Share the result in the chat, briefly : what went well, what to review.
 
 ## Quizzes
 
@@ -58,7 +72,7 @@ They are always `open` questions which represent a real milestone in the project
 ## Difficulty
 
 
-The target is about 70% of correct answers, 10% of incomplete answers and less than 10% of wrong answers. The tools evaluate the close questions on its own, but you have to evaluate the open questions yourself. After each exam, based on the results of the student, the course state's `progress.advice` (returned by `start_session` and `get_course_state`) says whether to keep, raise or lower the difficulty, and when a failed exam needs a re-explanation first. Follow it.
+The target is about 50% of A, 35% of B and 15% of C or D : a mean of about 4 out of 5. The tools propose the grades of the closed questions, but you have to grade the open questions yourself. After each exam, based on the results of the student, the course state's `progress.advice` (returned by `start_session` and `get_course_state`) says whether to keep, raise or lower the difficulty, and when a failed exam needs a re-explanation first. Follow it.
 
 A perfect test must feel like this for the student :
 - 45% very simple questions where I just have to remember definitions

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from teach_me.database import objects, vault
+from teach_me.database import objects, quiz, vault
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.project import project_summary
@@ -11,8 +11,9 @@ from teach_me.tools.skill import check_skills, list_skills
 
 CLASSES_BEFORE_EXERCISE = 3
 """The skill asks for at least one exercise every 3 classes."""
-TARGET_CORRECT, TARGET_WRONG = 0.7, 0.1
-"""A good exam : about 66 % of correct answers and less than 9 % of wrong ones."""
+TOO_EASY, TOO_HARD, FAILED = 4.5, 3.5, 2.5
+"""A good exam : about 50 % of A, 35 % of B and 15 % of C or D, a mean of about 4 out of 5. Above TOO_EASY it was too easy,
+below TOO_HARD too hard, and below FAILED its concepts need to be explained again."""
 
 
 def _created(document: Document) -> datetime:
@@ -30,18 +31,17 @@ def _progress(course: str) -> dict:
     corrected = [exam for exam in exams if exam.metadata.get("status") == "corrected" and exam.metadata.get("questions")]
     if corrected:
         exam = corrected[-1]
-        outcomes = [q.get("outcome") for q in exam.metadata["questions"] if q.get("outcome")]
-        if outcomes:
-            shares = {outcome: round(outcomes.count(outcome) / len(outcomes), 2) for outcome in ("correct", "incomplete", "wrong")}
-            last = {"slug": exam.slug, "title": exam.metadata.get("title"), **shares}
-            if shares["correct"] == 0 and shares["incomplete"] == 0:
-                advice.append("The last exam validated no skill : re-explain its concepts, then propose an easier exercise on them.")
-            elif shares["correct"] == 1:
-                advice.append("The last exam was fully successful : make the next one harder (it should stay rare).")
-            elif shares["wrong"] > TARGET_WRONG * 3 or shares["correct"] < TARGET_CORRECT / 2:
+        grades = [q.get("grade") for q in exam.metadata["questions"] if q.get("grade") in quiz.GRADES]
+        if grades:
+            mean = quiz.mean_score(grades)
+            shares = {grade: round(grades.count(grade) / len(grades), 2) for grade in quiz.GRADES}
+            last = {"slug": objects.slug(exam), "title": exam.metadata.get("title"), "mean": mean, "shares": shares}
+            if mean < FAILED:
+                advice.append("The last exam failed : re-explain its concepts, then propose an easier exercise on them.")
+            elif mean < TOO_HARD:
                 advice.append("The last exam was too hard : lower the difficulty of the next one.")
-            elif shares["correct"] > 0.85:
-                advice.append("The last exam was a bit easy : raise the difficulty of the next one.")
+            elif mean >= TOO_EASY:
+                advice.append("The last exam was too easy : raise the difficulty of the next one.")
             else:
                 advice.append("The difficulty of the last exam was right : keep it.")
     pending = [exam for exam in exams if exam.metadata.get("status") in ("assigned", "filled")]
@@ -78,13 +78,14 @@ def create_course(
         raise ToolError("The course needs a non empty `subject`.")
     if not skills:
         raise ToolError("Give the slugs of ALL the skills of the course in `skills` (create them first with create_skills) : exams can only evaluate these skills.")
-    skill_links = [vault.link(skill) for skill in check_skills(user, skills)]
+    skill_links = [objects.link("skill", skill, objects.skill_file(skill)) for skill in check_skills(user, skills)]
     project_links = []
     for project in projects or []:
-        owner = vault.unlink(objects.get_project(project).metadata.get("user", ""))
+        link = objects.link("project", project, objects.project_file(project))
+        owner = objects.unlink(objects.get_project(project).metadata.get("user", ""))
         if owner != user:
             raise ToolError(f"The project '{project}' belongs to '{owner}', not to '{user}'.")
-        project_links.append(vault.link(project))
+        project_links.append(link)
 
     title = (name or "").strip() or " ".join(subject.split()[:5])
     slug = vault.unique_slug(vault.slugify(title), lambda s: (objects.courses_dir() / s).exists())
@@ -93,7 +94,7 @@ def create_course(
         objects.course_file(slug),
         {
             "name": title,
-            "user": vault.link(user),
+            "user": objects.link("user", user, objects.user_file(user)),
             "subject": subject.strip(),
             "starting_level": (starting_level or "").strip(),
             "created_at": vault.format_time(moment),
@@ -102,7 +103,7 @@ def create_course(
             "skills": skill_links,
             "resources": [],
         },
-        f"## {vault.format_session(moment)}\n\n- Course created",
+        f"{objects.CONTENT_HEADING}\n\n## {vault.format_session(moment)}\n\n- Course created",
     )
     vault.write(document)
     return slug
@@ -144,20 +145,20 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         dict: {
             "slug", "name", "subject", "starting_level",
             "projects": [{"slug", "name", "description", "last_progress"}],
-            "skills": [{"slug", "name", "description", "latest_mark"}], the latest mark coming from the exams of all the courses,
+            "skills": [{"slug", "name", "description", "grade", "score"}], the grade coming from the exams of all the courses,
             "sessions": [{"session", "entries"}], the last sessions, most recent first,
             "pending_exams": exams whose status is "assigned" or "filled",
             "new_resources": shared resources whose status is "new",
-            "progress": {"classes_since_last_exam", "last_corrected_exam", "advice"} : what to do next, computed from the classes and the exams,
+            "progress": {"classes_since_last_exam", "last_corrected_exam" ({"slug", "title", "mean", "shares"}), "advice"} : what to do next, computed from the classes and the exams,
         }
     """
     document = objects.get_course(course)
     metadata = document.metadata
-    skills = list_skills(vault.unlink(metadata.get("user", "")), course)
+    skills = list_skills(objects.unlink(metadata.get("user", "")), course)
     sessions = objects.parse_sessions(document.body)[::-1][: max(last_sessions, 0)]
     pending = [
         {
-            "slug": exam.slug,
+            "slug": objects.slug(exam),
             "title": exam.metadata.get("title"),
             "type": exam.metadata.get("type"),
             "status": exam.metadata.get("status"),
@@ -176,7 +177,7 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         "name": metadata.get("name"),
         "subject": metadata.get("subject"),
         "starting_level": metadata.get("starting_level"),
-        "projects": [project_summary(vault.unlink(project)) for project in metadata.get("projects") or []],
+        "projects": [project_summary(objects.unlink(project)) for project in metadata.get("projects") or []],
         "skills": skills,
         "sessions": [{"session": label, "entries": entries} for label, entries in sessions],
         "pending_exams": pending,
