@@ -6,6 +6,11 @@ from teach_me.database import objects, vault
 from teach_me.errors import ToolError
 
 
+def resource_slug(resource: dict) -> str:
+    """The slug of a resource, unique in its course. Resources shared before the slugs existed get the one of their title."""
+    return str(resource.get("slug") or vault.slugify(str(resource.get("title", ""))))
+
+
 def _find(resources: list, title: str) -> Optional[dict]:
     for resource in resources:
         if isinstance(resource, dict) and str(resource.get("title", "")).strip().lower() == title.strip().lower():
@@ -28,7 +33,7 @@ def share_resource(
         file_path (Optional[str]): The path of a local file. Takes priority over web_url. Defaults to None.
 
     Returns:
-        str: The title of the resource
+        str: The slug of the resource, to give to update_resource
     """
     if not (title or "").strip():
         raise ToolError("The resource needs a non empty `title`.")
@@ -46,8 +51,11 @@ def share_resource(
         None,
     )
     if resource is None:
-        resource = {"title": title.strip(), **location, "status": "new", "created_at": vault.format_time(vault.now())}
+        taken = {resource_slug(r) for r in resources if isinstance(r, dict)}
+        slug = vault.unique_slug(vault.slugify(title), lambda s: s in taken)
+        resource = {"slug": slug, "title": title.strip(), **location, "status": "new", "created_at": vault.format_time(vault.now())}
         resources.append(resource)
+    resource.setdefault("slug", resource_slug(resource))
     resource["session"] = label
     if resource.get("status") == "unprocessed":
         resource["status"] = "new"
@@ -55,29 +63,30 @@ def share_resource(
     target = location.get("file_path") or location.get("web_url")
     objects.append_to_session(document, f"Shared [{title.strip()}]({target})")
     vault.write(document)
-    return str(resource["title"])
+    return str(resource["slug"])
 
 
-def update_resource(course: str, title: str, status: Literal["new", "explained", "unprocessed"]) -> str:
+def update_resource(course: str, resource: str, status: Literal["new", "explained", "unprocessed"]) -> str:
     """Updates the status of a shared resource : "explained" once the student has engaged with it, "unprocessed" when it is no longer relevant. Only "new" resources are returned by get_course_state.
 
     Args:
         course (str): The slug of the course
-        title (str): The title of the resource
+        resource (str): The slug of the resource, as returned by share_resource or get_course_state
         status (Literal["new", "explained", "unprocessed"]): The new status
 
     Returns:
-        str: The title of the resource
+        str: The slug of the resource
     """
     if status not in objects.RESOURCE_STATUSES:
         raise ToolError(f"Unknown status '{status}'. Use one of : {', '.join(objects.RESOURCE_STATUSES)}.")
     document = objects.get_course(course)
-    resources = document.metadata.get("resources") or []
-    resource = _find(resources, title)
-    if resource is None:
-        titles = [str(r.get("title")) for r in resources if isinstance(r, dict)]
-        raise ToolError(f"Unknown resource '{title}'. Resources of this course : {', '.join(titles) or 'none'}.")
-    resource["status"] = status
+    resources = [r for r in document.metadata.get("resources") or [] if isinstance(r, dict)]
+    found = next((r for r in resources if resource_slug(r) == resource), None)
+    if found is None:
+        known = ", ".join(f"{resource_slug(r)} ({r.get('title')})" for r in resources)
+        raise ToolError(f"Unknown resource '{resource}'. Resources of this course : {known or 'none'}. Use the slug returned by share_resource.")
+    found.setdefault("slug", resource_slug(found))
+    found["status"] = status
     objects.current_session(document)
     vault.write(document)
-    return str(resource["title"])
+    return str(found["slug"])

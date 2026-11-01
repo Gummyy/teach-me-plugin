@@ -5,13 +5,17 @@ Nothing in this module knows about users, courses or exams.
 
 from __future__ import annotations
 
+import functools
 import os
 import re
+import time
 import unicodedata
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Iterator, Optional
 
 import yaml
 
@@ -23,6 +27,10 @@ TIME_FORMAT = "%Y-%m-%dT%H:%M"
 SESSION_FORMAT = "%Y-%m-%d %H:%M"
 """Format of the session labels, used as headings in `course.md`."""
 MAX_SLUG_LENGTH = 50
+LOCK_TIMEOUT = 10.0
+"""Seconds a tool call waits for another session to release the vault."""
+STALE_LOCK = 60.0
+"""A lock older than this many seconds was left by a server that crashed : it is removed."""
 
 _FRONTMATTER = re.compile(r"\A---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)(.*)\Z", re.DOTALL)
 
@@ -144,28 +152,51 @@ class Document:
     path: Path
     metadata: dict[str, Any] = field(default_factory=dict)
     body: str = ""
+    mtime_ns: Optional[int] = field(default=None, repr=False, compare=False)
+    """Modification time of the file when it was read : `write` refuses to overwrite a file changed since. None for a new document."""
 
     @property
     def slug(self) -> str:
         return self.path.stem
 
 
-def read(path: Path) -> Document:
-    text = path.read_text(encoding="utf-8")
+class ConflictError(ToolError):
+    """A file changed on disk between the moment a tool read it and the moment it writes it."""
+
+    def __init__(self, path: Path):
+        super().__init__(f"'{relative(path)}' was changed outside this tool call (Obsidian, a sync or another session) : call the tool again.")
+        self.path = path
+
+
+def _parse_frontmatter(path: Path, text: str) -> tuple[dict, str]:
     match = _FRONTMATTER.match(text)
     if not match:
-        return Document(path, {}, text.strip("\n"))
+        return {}, text.strip("\n")
     try:
         metadata = yaml.safe_load(match.group(1)) or {}
     except yaml.YAMLError as error:
-        raise ToolError(f"The frontmatter of '{path.name}' is not valid YAML : {error}") from error
-    if not isinstance(metadata, dict):
-        metadata = {}
-    return Document(path, metadata, match.group(2).strip("\n"))
+        raise ToolError(
+            f"The frontmatter of '{relative(path)}' is not valid YAML, probably after a manual edit : {error}\n"
+            f"Fix it with repair_note(path=\"{relative(path)}\", frontmatter=...), keeping every key and value. "
+            f"Its current frontmatter :\n{match.group(1)}"
+        ) from error
+    return (metadata if isinstance(metadata, dict) else {}), match.group(2).strip("\n")
+
+
+def read(path: Path) -> Document:
+    mtime_ns = path.stat().st_mtime_ns  # before reading : a change during the read is caught by `write`
+    metadata, body = _parse_frontmatter(path, path.read_text(encoding="utf-8"))
+    return Document(path, metadata, body, mtime_ns)
 
 
 def write(document: Document) -> None:
-    """Writes a document atomically, so that a crash never leaves a half written file."""
+    """Writes a document atomically, so that a crash never leaves a half written file.
+
+    Raises:
+        ConflictError: when the file changed since the document was read
+    """
+    if document.mtime_ns is not None and document.path.is_file() and document.path.stat().st_mtime_ns != document.mtime_ns:
+        raise ConflictError(document.path)
     document.path.parent.mkdir(parents=True, exist_ok=True)
     frontmatter = yaml.safe_dump(
         document.metadata, sort_keys=False, allow_unicode=True, width=10_000
@@ -175,3 +206,99 @@ def write(document: Document) -> None:
     temporary = document.path.with_name(document.path.name + ".tmp")
     temporary.write_text(text, encoding="utf-8", newline="\n")
     temporary.replace(document.path)
+    document.mtime_ns = document.path.stat().st_mtime_ns  # the same document can be written again by the same tool
+    written = _written.get()
+    if written is not None:
+        written.append(document.path)
+
+
+def repair(path: str, frontmatter: str) -> Document:
+    """Replaces the broken frontmatter of a note with `frontmatter`, keeping its content. Refuses a note whose frontmatter is valid."""
+    root = vault_path()
+    target = (root / path).resolve()
+    if not target.is_relative_to(root) or target.suffix != ".md" or not target.is_file():
+        raise ToolError(f"There is no note at '{path}' in the vault : give its path relative to the vault, as written in the error.")
+    mtime_ns = target.stat().st_mtime_ns
+    text = target.read_text(encoding="utf-8")
+    match = _FRONTMATTER.match(text)
+    if match is None:
+        raise ToolError(f"'{path}' has no frontmatter between two '---' lines : there is nothing to repair.")
+    try:
+        yaml.safe_load(match.group(1))
+    except yaml.YAMLError:
+        pass
+    else:
+        raise ToolError(f"The frontmatter of '{path}' is valid : there is nothing to repair. Use the other tools to change it.")
+    try:
+        metadata = yaml.safe_load(frontmatter)
+    except yaml.YAMLError as error:
+        raise ToolError(f"The new `frontmatter` isn't valid YAML either : {error}") from error
+    if not isinstance(metadata, dict) or not metadata:
+        raise ToolError("The new `frontmatter` must be a YAML mapping of the keys of the note, without the '---' lines.")
+    document = Document(target, metadata, match.group(2).strip("\n"), mtime_ns)
+    write(document)
+    return document
+
+
+# --------------------------------------------------------------------------- #
+# Concurrent sessions
+# --------------------------------------------------------------------------- #
+
+_written: ContextVar[Optional[list[Path]]] = ContextVar("written", default=None)
+"""The files written by the current tool call, tracked by `serialized`."""
+
+
+@contextmanager
+def locked() -> Iterator[None]:
+    """Holds the lock of the vault : a file created exclusively, which works on any file system (fcntl locks don't on /mnt/c)."""
+    lock = vault_path() / ".teach-me" / "lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + LOCK_TIMEOUT
+    while True:
+        try:
+            descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > STALE_LOCK:
+                    lock.unlink(missing_ok=True)
+                    continue
+            except FileNotFoundError:
+                continue
+            if time.monotonic() > deadline:
+                raise ToolError("The vault is busy : another teach-me session is writing in it. Call the tool again in a few seconds.") from None
+            time.sleep(0.05)
+    with os.fdopen(descriptor, "w") as file:
+        file.write(f"{os.getpid()}\n")
+    try:
+        yield
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def serialized(function: Callable) -> Callable:
+    """Runs a tool while holding the lock of the vault, so that two sessions never interleave their reads and writes.
+
+    When a file changed outside the call (Obsidian, a sync) before the tool wrote anything, the tool is run
+    again on fresh files. Once it has written something, running it again could duplicate it : the error
+    tells the model what was written instead.
+    """
+
+    @functools.wraps(function)
+    def wrapper(*args, **kwargs):
+        with locked():
+            for attempt in (1, 2):
+                token = _written.set([])
+                try:
+                    return function(*args, **kwargs)
+                except ConflictError as error:
+                    written = _written.get() or []
+                    if written:
+                        names = ", ".join(relative(path) for path in written)
+                        raise ToolError(f"{error} This call had already written : {names}. Check what is missing before calling again.") from error
+                    if attempt == 2:
+                        raise
+                finally:
+                    _written.reset(token)
+
+    return wrapper

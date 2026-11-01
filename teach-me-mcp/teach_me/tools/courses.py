@@ -7,6 +7,7 @@ from teach_me.database import objects, quiz, vault
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.project import project_summary
+from teach_me.tools.resources import resource_slug
 from teach_me.tools.skill import check_skills, list_skills
 
 CLASSES_BEFORE_EXERCISE = 3
@@ -60,7 +61,7 @@ def create_course(
     projects: Optional[list[str]] = None,
     name: Optional[str] = None,
 ) -> str:
-    """Creates a course and opens its first session. Before calling this tool, you must have create its projects (create_project) and its skills (create_skills) first.
+    """Creates a course and opens its first session. Before calling this tool, you must have created its projects (create_project) and its skills (create_skills).
 
     Args:
         user (str): The slug of the user
@@ -81,11 +82,10 @@ def create_course(
     skill_links = [objects.link("skill", skill, objects.skill_file(skill)) for skill in check_skills(user, skills)]
     project_links = []
     for project in projects or []:
-        link = objects.link("project", project, objects.project_file(project))
-        owner = objects.unlink(objects.get_project(project).metadata.get("user", ""))
+        owner = objects.unlink(objects.get_project(project, user).metadata.get("user", ""))
         if owner != user:
             raise ToolError(f"The project '{project}' belongs to '{owner}', not to '{user}'.")
-        project_links.append(link)
+        project_links.append(objects.link("project", project, objects.project_file(project)))
 
     title = (name or "").strip() or " ".join(subject.split()[:5])
     slug = vault.unique_slug(vault.slugify(title), lambda s: (objects.courses_dir() / s).exists())
@@ -148,7 +148,7 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
             "skills": [{"slug", "name", "description", "grade", "score"}], the grade coming from the exams of all the courses,
             "sessions": [{"session", "entries"}], the last sessions, most recent first,
             "pending_exams": exams whose status is "assigned" or "filled",
-            "new_resources": shared resources whose status is "new",
+            "new_resources": shared resources whose status is "new" : [{"slug", "title", "web_url" or "file_path", "status", "session"}],
             "progress": {"classes_since_last_exam", "last_corrected_exam" ({"slug", "title", "mean", "shares"}), "advice"} : what to do next, computed from the classes and the exams,
         }
     """
@@ -168,7 +168,7 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         if exam.metadata.get("status") in ("assigned", "filled")
     ]
     resources = [
-        resource
+        {"slug": resource_slug(resource), **resource}
         for resource in metadata.get("resources") or []
         if isinstance(resource, dict) and resource.get("status", "new") == "new"
     ]

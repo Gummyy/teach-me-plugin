@@ -32,13 +32,13 @@ We always start by creating the project, then the skills, then only do we create
 
 ## Initializing a project
 
-In order to initailize a project, you must ask questions to your student until you have the answer to all of these questions :
+In order to initialize a project, you must ask questions to your student until you have the answer to all of these questions :
 
 - what is the current state of their project ? Is it new, already started, almost finished ? Can you read the current version of the project ?
 - what does the student want to build ? You must identify precisely the features that they wish to add to their project. This may need a couple questions / answers. Be patient and don't rush this step as it is one of the most defining moments of the time you'll have with your student.
 - how are they working on their project ? Do they work alone ? How much time do they plan on allocating working on their project ? You will have to adapt your lessons based on the attachment of the user to their project, as it is the most relevant measurement of their overall involment in your lessons as well.
 
-The answer to all of these questions must be gathered before creating the project. Once they are acquired, call `create_project` with all these info. Don't omit any detail, since your student won't repeat themselve and expect that you've remembered everything.
+The answer to all of these questions must be gathered before creating the project. Once they are acquired, call `create_project` with all these info. Don't omit any detail, since your student won't repeat themselves and expect that you've remembered everything.
 
 ## Initializing a course
 
@@ -47,7 +47,7 @@ In order to initialize a course, you must ask questions to your student until yo
 - what does the student already know ?
 - what is the student's project ? If they have no precise project, propose some examples until they pick one. It is always better if the student likes their project as it is going to be their main source of motivation ! Refer to the [initializing a project](#initializing-a-project) reference !
 
-Then list **all** the skills that the student will validate during this course (it can range from ~5 to ~100), with a one sentence description each, and check the list with the student. The student may not be able to validate the skills because they don't know many of the concepts you are about to teach them, but they must confirm that they believe you have succesfully targeted what they want to learn.
+Then list **all** the skills that the student will validate during this course (it can range from ~5 to ~100), with a one sentence description each, and check the list with the student. The student may not be able to validate the skills because they don't know many of the concepts you are about to teach them, but they must confirm that they believe you have successfully targeted what they want to learn.
 
 ### Determining the skills of a course
 
@@ -70,17 +70,17 @@ Here are the keys to properly choosing the skills associated with a course :
 2. Select queries on different tables
   1. Understanding the different types of JOIN
   2. Using JOIN with SELECT queries
-3. Working with agregation
+3. Working with aggregation
   1. Using the GROUP BY keyword
   2. Using the HAVING keyword
-  3. Using complex queries with agregation
+  3. Using complex queries with aggregation
 
-As you can see in that example, the 2.x and 3.x skills imply using the skills developped in the 1.x section. It is ok to repeat these skills because they are important the progression is very natural.
+As you can see in that example, the 2.x and 3.x skills imply using the skills developed in the 1.x section. It is ok to repeat these skills because they are important the progression is very natural.
 
 #### Questions to ask yourself before validating the skills of a course
 
 - Do I cover the important concepts of the course ?
-- Do I sufficently cover the most important ones ?
+- Do I sufficiently cover the most important ones ?
 - Does the progression feel natural with the current level of the student up until the completion of their projects ?
 - Can the student build their projects if they have validated all their skills ?
 - Will the student need to validate most of their skills to build their projects ?

@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterator, Optional, Union
+from typing import Iterable, Iterator, Optional, Union
 
 from teach_me.database import quiz, vault
 from teach_me.database.vault import Document
@@ -126,8 +126,8 @@ def link(kind: str, target: str, path: Path, alias: Optional[str] = None) -> str
     return f"{text[:-2]}|{alias}]]"
 
 
-def _known(paths: Iterator[Path], limit: int = 20) -> str:
-    names = sorted(slug(path) for path in paths)
+def _known(slugs: Iterable[str], limit: int = 20) -> str:
+    names = sorted(slugs)
     if not names:
         return "none"
     return ", ".join(names[:limit]) + (", ..." if len(names) > limit else "")
@@ -145,7 +145,7 @@ def _owned_by(document: Document, user: Optional[str]) -> bool:
 def get_user(user: str) -> Document:
     path = user_file(user)
     if not path.is_file():
-        raise ToolError(f"Unknown user '{user}'. Known users : {_known(users_dir().glob('*.md'))}. {HINTS['user']}")
+        raise ToolError(f"Unknown user '{user}'. Known users : {_known(slug(path) for path in users_dir().glob(PREFIXES['user'] + '*.md'))}. {HINTS['user']}")
     return vault.read(path)
 
 
@@ -154,14 +154,15 @@ def iter_users() -> Iterator[Document]:
         yield vault.read(path)
 
 
-def get_project(project: str) -> Document:
+def get_project(project: str, user: Optional[str] = None) -> Document:
+    """The note of a project. When it doesn't exist, the error lists the projects of `user` (of every user when None)."""
     path = project_file(project)
     if not path.is_file():
-        raise ToolError(f"Unknown project '{project}'. Known projects : {_known(projects_dir().glob('*.md'))}. {HINTS['project']}")
+        raise ToolError(f"Unknown project '{project}'. Known projects : {_known(slug(document) for document in iter_projects(user))}. {HINTS['project']}")
     return vault.read(path)
 
 
-def iter_projects(user: str) -> Iterator[Document]:
+def iter_projects(user: Optional[str]) -> Iterator[Document]:
     for path in sorted(projects_dir().glob(f"{PREFIXES['project']}*.md")):
         document = vault.read(path)
         if _owned_by(document, user):
@@ -173,14 +174,15 @@ def iter_projects(user: str) -> Iterator[Document]:
 # --------------------------------------------------------------------------- #
 
 
-def get_skill(skill: str) -> Document:
+def get_skill(skill: str, user: Optional[str] = None) -> Document:
+    """The note of a skill. When it doesn't exist, the error lists the skills of `user` (of every user when None)."""
     path = skill_file(skill)
     if not path.is_file():
-        raise ToolError(f"Unknown skill '{skill}'. Known skills : {_known(skills_dir().glob('*.md'))}. {HINTS['skill']}")
+        raise ToolError(f"Unknown skill '{skill}'. Known skills : {_known(slug(document) for document in iter_skills(user))}. {HINTS['skill']}")
     return vault.read(path)
 
 
-def iter_skills(user: str) -> Iterator[Document]:
+def iter_skills(user: Optional[str]) -> Iterator[Document]:
     for path in sorted(skills_dir().glob(f"{PREFIXES['skill']}*.md")):
         document = vault.read(path)
         if _owned_by(document, user):
@@ -224,11 +226,11 @@ def skill_grades(user: str) -> dict[str, dict]:
 # --------------------------------------------------------------------------- #
 
 
-def get_course(course: str) -> Document:
+def get_course(course: str, user: Optional[str] = None) -> Document:
+    """The note of a course. When it doesn't exist, the error lists the courses of `user` (of every user when None)."""
     path = course_file(course)
     if not path.is_file():
-        courses = (p.parent for p in courses_dir().glob(f"*/{PREFIXES['course']}*.md"))
-        raise ToolError(f"Unknown course '{course}'. Known courses : {_known(courses)}. {HINTS['course']}")
+        raise ToolError(f"Unknown course '{course}'. Known courses : {_known(course_slug(document) for document in iter_courses(user))}. {HINTS['course']}")
     return vault.read(path)
 
 
@@ -349,7 +351,7 @@ def find_document(kind: str, target: str) -> Document:
     matches = sorted(path for prefix in _document_prefixes(kind) for path in courses_dir().glob(f"*/{kind}/{prefix}{target}.md"))
     if not matches:
         name = "exam" if kind == "exams" else "class"
-        known = courses_dir().glob(f"*/{kind}/*.md")
+        known = (slug(path) for path in courses_dir().glob(f"*/{kind}/*.md"))
         raise ToolError(f"Unknown {name} '{target}'. Known : {_known(known)}. {HINTS[name]}")
     return vault.read(matches[0])
 

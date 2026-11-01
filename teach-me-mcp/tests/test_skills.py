@@ -16,9 +16,16 @@ def test_create_skills(course):
     assert objects.get_skill("convolution").body == "Computes and interprets a 2D convolution"  # a reused skill keeps its description
 
 
+def test_unknown_skill_lists_the_skills_of_the_user_only(course):
+    create_user("Bob", {"language": "english"})
+    create_skills("bob", [{"name": "Welding", "description": ""}])
+    with pytest.raises(ToolError, match="Known skills : cnn-architecture, convolution\\."):
+        create_course("alice", "Subject", "Level", ["nope"])
+
+
 def test_create_skills_checks_its_arguments(vault):
-    create_user("Alice")
-    create_user("Bob")
+    create_user("Alice", {"language": "english"})
+    create_user("Bob", {"language": "english"})
     with pytest.raises(ToolError, match="at least one skill"):
         create_skills("alice", [])
     with pytest.raises(ToolError, match="appears twice"):
@@ -31,14 +38,21 @@ def test_list_skills(course):
     create_skills("alice", [{"name": "Pooling", "description": ""}])
     assert [skill["slug"] for skill in list_skills("alice")] == ["cnn-architecture", "convolution", "pooling"]
     assert [skill["slug"] for skill in list_skills("alice", course)] == ["convolution", "cnn-architecture"]  # in the order of the course
-    create_user("Bob")
+    create_user("Bob", {"language": "english"})
     with pytest.raises(ToolError, match="belongs to 'alice'"):
         list_skills("bob", course)
 
 
 def test_edit_skill(course):
     edited = edit_skill("convolution", name="2D convolution", description="Computes a 2D convolution by hand")
-    assert edited == {"slug": "convolution", "name": "2D convolution", "description": "Computes a 2D convolution by hand", "grade": None, "score": None}
+    assert edited == {
+        "slug": "convolution",
+        "name": "2D convolution",
+        "description": "Computes a 2D convolution by hand",
+        "grade": None,
+        "score": None,
+        "replaced": {"name": "convolution", "description": "Computes and interprets a 2D convolution"},
+    }
     with pytest.raises(ToolError, match="already has a skill named"):
         edit_skill("convolution", name="CNN-architecture")
     with pytest.raises(ToolError, match="Nothing to update"):

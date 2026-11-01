@@ -6,6 +6,7 @@ the TEACH_ME_VAULT environment variable.
 
 from fastmcp import FastMCP
 
+from teach_me.database import vault
 from teach_me.tools import ALL_TOOLS
 
 mcp = FastMCP(
@@ -18,7 +19,7 @@ mcp = FastMCP(
 )
 
 for tool in ALL_TOOLS:
-    mcp.tool(tool)
+    mcp.tool(vault.serialized(tool))  # the lock of the vault : several sessions can share it
 
 
 def main() -> None:

@@ -6,6 +6,7 @@ from typing import Optional
 from teach_me.database import objects, vault
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
+from teach_me.tools.users import edit_text
 
 PROGRESS_HEADING = "## Progress"
 
@@ -74,32 +75,38 @@ def update_project(
     progress: Optional[str] = None,
     name: Optional[str] = None,
     description: Optional[str] = None,
+    add_to_description: Optional[str] = None,
 ) -> dict:
-    """Updates a project as it advances. The progress log only grows : entries are never removed.
+    """Updates a project as it advances. The progress log only grows : entries are never removed. A text you give (name, description) replaces the current one, which is returned in `replaced`.
 
     Args:
         project (str): The slug of the project
         progress (Optional[str]): 1-2 sentences about what changed in the project (a step done, a decision, a new problem), added to its dated progress log. Defaults to None.
         name (Optional[str]): The new name of the project. Its slug doesn't change. Defaults to None.
-        description (Optional[str]): The new description, when the goal or the scope of the project changed. The progress log is kept. Defaults to None.
+        description (Optional[str]): A whole new description, when the goal or the scope of the project changed. The progress log is kept. Defaults to None.
+        add_to_description (Optional[str]): A paragraph appended to the description, e.g. a new feature the student wants, without repeating the description. Defaults to None.
 
     Returns:
-        dict: {"slug", "name", "description", "last_progress"} : the project after the update
+        dict: {"slug", "name", "description", "last_progress", "replaced"} : the project after the update, and the previous version of each text you replaced, e.g. {"description": "..."}
     """
     document = objects.get_project(project)
-    if progress is None and name is None and description is None:
-        raise ToolError("Nothing to update : give a `progress` entry, a new `name` or a new `description`.")
+    if progress is None and name is None and description is None and add_to_description is None:
+        raise ToolError("Nothing to update : give a `progress` entry, a new `name`, a new `description` or `add_to_description`.")
     current_description, log = _split_project(document.body)
+    replaced = {}
     if name is not None:
         if not name.strip():
             raise ToolError("The project `name` can't be empty.")
+        if name.strip() != document.metadata.get("name"):
+            replaced["name"] = document.metadata.get("name")
         document.metadata["name"] = name.strip()
-    if description is not None:
-        current_description = description.strip()
+    current_description, previous = edit_text(current_description, description, add_to_description)
+    if previous is not None:
+        replaced["description"] = previous
     if progress is not None and progress.strip():
         entry = f"- {vault.now():%Y-%m-%d} : {' '.join(progress.split())}"
         log = f"{log}\n{entry}".strip()
     document.metadata["updated_at"] = vault.format_time(vault.now())
     document.body = current_description + (f"\n\n{PROGRESS_HEADING}\n\n{log}" if log else "")
     vault.write(document)
-    return _summary(document)
+    return {**_summary(document), "replaced": replaced}

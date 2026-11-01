@@ -30,12 +30,14 @@ def test_every_tool_is_registered():
 def test_journey_through_the_client(vault):
     async def scenario():
         async with Client(mcp) as client:
-            await client.call_tool("create_user", {"name": "Alice"})
+            await client.call_tool("create_user", {"name": "Alice", "preferences": {"language": "english"}})
+            refused = await client.call_tool("create_user", {"name": "Bob", "preferences": {"language": "english", "quizzes": "chat"}}, raise_on_error=False)
             users = await client.call_tool("list_users", {})
             failure = await client.call_tool("get_user", {"user": "bob"}, raise_on_error=False)
-            return users, failure
+            return users, failure, refused
 
-    users, failure = run(scenario())
+    users, failure, refused = run(scenario())
+    assert refused.is_error  # an unknown key of the preferences is refused, not silently dropped
     assert users.data[0]["slug"] == "alice"
     assert failure.is_error
     assert "Known users : alice" in failure.content[0].text

@@ -10,7 +10,7 @@ from teach_me.database import objects, vault
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.schemas import SkillDeclaration
-from teach_me.tools.users import _validate_skills
+from teach_me.tools.users import _validate_skills, edit_text
 
 
 def _summary(document: Document, grades: dict[str, dict]) -> dict:
@@ -26,7 +26,7 @@ def check_skills(user: str, skills: list[str]) -> list[str]:
     """Checks that the skills exist and belong to the user. Returns their slugs, without duplicates."""
     slugs = list(dict.fromkeys(objects.unlink(skill) for skill in skills))
     for skill in slugs:
-        owner = objects.unlink(objects.get_skill(skill).metadata.get("user", ""))
+        owner = objects.unlink(objects.get_skill(skill, user).metadata.get("user", ""))
         if owner != user:
             raise ToolError(f"The skill '{skill}' belongs to '{owner}', not to '{user}'.")
     return slugs
@@ -80,7 +80,7 @@ def list_skills(user: str, course: Optional[str] = None) -> list[dict]:
     grades = objects.skill_grades(user)
     if course is None:
         return [_summary(document, grades) for document in objects.iter_skills(user)]
-    document = objects.get_course(course)
+    document = objects.get_course(course, user)
     owner = objects.unlink(document.metadata.get("user", ""))
     if owner != user:
         raise ToolError(f"The course '{course}' belongs to '{owner}', not to '{user}'.")
@@ -88,7 +88,7 @@ def list_skills(user: str, course: Optional[str] = None) -> list[dict]:
 
 
 def edit_skill(skill: str, name: Optional[str] = None, description: Optional[str] = None) -> dict:
-    """Renames a skill or changes its description. Its slug doesn't change, so the courses and the exams that use it are kept.
+    """Renames a skill or changes its description. Its slug doesn't change, so the courses and the exams that use it are kept. The texts you give replace the current ones, which are returned in `replaced`.
 
     Args:
         skill (str): The slug of the skill
@@ -96,12 +96,13 @@ def edit_skill(skill: str, name: Optional[str] = None, description: Optional[str
         description (Optional[str]): The new description : one sentence about what the student can do once the skill is validated. Defaults to None.
 
     Returns:
-        dict: {"slug", "name", "description", "grade", "score"} : the skill after the update
+        dict: {"slug", "name", "description", "grade", "score", "replaced"} : the skill after the update, and the previous version of each text you replaced
     """
     document = objects.get_skill(skill)
     if name is None and description is None:
         raise ToolError("Nothing to update : give a new `name` or a new `description`.")
     user = objects.unlink(document.metadata.get("user", ""))
+    replaced = {}
     if name is not None:
         name = name.strip()
         if not name:
@@ -109,9 +110,12 @@ def edit_skill(skill: str, name: Optional[str] = None, description: Optional[str
         for other in objects.iter_skills(user):
             if objects.slug(other) != skill and str(other.metadata.get("name") or "").lower() == name.lower():
                 raise ToolError(f"'{user}' already has a skill named '{name}' : '{objects.slug(other)}'.")
+        if name != document.metadata.get("name"):
+            replaced["name"] = document.metadata.get("name")
         document.metadata["name"] = name
-    if description is not None:
-        document.body = description.strip()
+    document.body, previous = edit_text(document.body, description, None)
+    if previous is not None:
+        replaced["description"] = previous
     document.metadata["updated_at"] = vault.format_time(vault.now())
     vault.write(document)
-    return _summary(document, objects.skill_grades(user))
+    return {**_summary(document, objects.skill_grades(user)), "replaced": replaced}

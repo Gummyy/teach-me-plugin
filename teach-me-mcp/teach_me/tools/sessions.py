@@ -28,7 +28,7 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
     if user is None:
         users = list_users()
         if not users:
-            return {**result, "next_step": "There is no user yet : ask the student how they want to be called, then call create_user and start_session again."}
+            return {**result, "next_step": "There is no user yet : ask the student how they want to be called, then call create_user (in the language they talk to you in) and start_session again."}
         if len(users) > 1:
             return {**result, "users": users, "next_step": "Several users share this vault : ask the student who they are, then call start_session again with `user`."}
         user = users[0]["slug"]
@@ -43,7 +43,7 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
             step = "The student has no course yet : follow 'Initializing a course or a project' in the skill : project, then skills, then course."
         return {**result, "next_step": step}
 
-    document = objects.get_course(course)
+    document = objects.get_course(course, user)
     owner = objects.unlink(document.metadata.get("user", ""))
     if owner != user:
         raise ToolError(f"The course '{course}' belongs to '{owner}', not to '{user}'.")

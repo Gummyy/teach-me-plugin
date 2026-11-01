@@ -14,7 +14,7 @@ def vault(tmp_path, monkeypatch):
 @pytest.fixture
 def course(vault):
     """A vault with one user (alice), one project (pet-classifier), two skills (convolution, cnn-architecture) and one course (computer-vision)."""
-    create_user("Alice", "Likes photography", {"language": "french"})
+    create_user("Alice", {"language": "french"}, "Likes photography")
     create_project("alice", "Pet classifier", "Classify the pictures of my cats and dogs.")
     skills = create_skills(
         "alice",

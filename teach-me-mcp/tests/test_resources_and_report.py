@@ -1,6 +1,6 @@
 import pytest
 
-from teach_me.database import objects
+from teach_me.database import objects, vault
 from teach_me.errors import ToolError
 from teach_me.tools import (
     correct_exam,
@@ -15,18 +15,33 @@ from teach_me.tools import (
 
 
 def test_share_and_update_resource(course):
-    share_resource(course, "3Blue1Brown - But what is a convolution ?", web_url="https://www.youtube.com/watch?v=KuXjwB4LzSA")
+    slug = share_resource(course, "3Blue1Brown - But what is a convolution ?", web_url="https://www.youtube.com/watch?v=KuXjwB4LzSA")
+    assert slug == "3blue1brown-but-what-is-a-convolution"
     resources = get_course_state(course)["new_resources"]
     assert len(resources) == 1
-    assert resources[0]["web_url"] == "https://www.youtube.com/watch?v=KuXjwB4LzSA"
+    assert resources[0]["web_url"] == "https://www.youtube.com/watch?v=KuXjwB4LzSA" and resources[0]["slug"] == slug
 
-    update_resource(course, "3blue1brown - but what is a convolution ?", "explained")  # case insensitive
+    assert update_resource(course, slug, "explained") == slug
     assert get_course_state(course)["new_resources"] == []
+
+
+def test_resources_have_unique_slugs(course):
+    assert share_resource(course, "Video", web_url="https://example.com/1") == "video"
+    assert share_resource(course, "Video !", web_url="https://example.com/2") == "video-2"
+
+
+def test_resources_shared_before_the_slugs(course):
+    document = objects.get_course(course)
+    document.metadata["resources"] = [{"title": "Old video", "web_url": "https://example.com", "status": "new"}]
+    vault.write(document)
+    assert get_course_state(course)["new_resources"][0]["slug"] == "old-video"
+    update_resource(course, "old-video", "explained")
+    assert objects.get_course(course).metadata["resources"][0] == {"title": "Old video", "web_url": "https://example.com", "status": "explained", "slug": "old-video"}
 
 
 def test_unprocessed_resource(course):
     share_resource(course, "Old podcast", web_url="https://example.com/old")
-    update_resource(course, "Old podcast", "unprocessed")
+    update_resource(course, "old-podcast", "unprocessed")
     assert get_course_state(course)["new_resources"] == []
     share_resource(course, "Old podcast", web_url="https://example.com/old")  # relevant again
     assert [r["title"] for r in get_course_state(course)["new_resources"]] == ["Old podcast"]
@@ -50,8 +65,9 @@ def test_resource_needs_a_location(course):
 
 
 def test_unknown_resource(course):
-    with pytest.raises(ToolError, match="Unknown resource"):
-        update_resource(course, "Nope", "explained")
+    share_resource(course, "Video", web_url="https://example.com")
+    with pytest.raises(ToolError, match=r"Unknown resource 'nope'.*video \(Video\)"):
+        update_resource(course, "nope", "explained")
 
 
 def test_report_card(course, vault):

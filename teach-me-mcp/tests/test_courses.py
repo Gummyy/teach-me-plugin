@@ -33,21 +33,21 @@ def test_create_course(course, vault):
 
 
 def test_course_slug_defaults_to_the_subject(vault):
-    create_user("Alice")
+    create_user("Alice", {"language": "english"})
     create_skills("alice", [{"name": "arima", "description": ""}])
     slug = create_course("alice", "Machine learning for time series forecasting.", "", ["arima"])
     assert slug == "machine-learning-for-time-series"
 
 
 def test_course_needs_skills(vault):
-    create_user("Alice")
+    create_user("Alice", {"language": "english"})
     with pytest.raises(ToolError, match="ALL the skills"):
         create_course("alice", "Subject", "Level", skills=[])
 
 
 def test_course_skills_must_exist_and_belong_to_the_user(vault):
-    create_user("Alice")
-    create_user("Bob")
+    create_user("Alice", {"language": "english"})
+    create_user("Bob", {"language": "english"})
     create_skills("bob", [{"name": "Welding", "description": ""}])
     with pytest.raises(ToolError, match="Unknown skill 'nope'.*create_skills"):
         create_course("alice", "Subject", "Level", ["nope"])
@@ -56,8 +56,8 @@ def test_course_skills_must_exist_and_belong_to_the_user(vault):
 
 
 def test_course_project_must_exist_and_belong_to_the_user(vault):
-    create_user("Alice")
-    create_user("Bob")
+    create_user("Alice", {"language": "english"})
+    create_user("Bob", {"language": "english"})
     create_project("bob", "Robot", "A robot")
     create_skills("alice", [{"name": "a", "description": ""}])
     skills = ["a"]
@@ -119,7 +119,7 @@ def test_update_project_keeps_its_history(course):
 
 
 def test_start_session(course):
-    create_user("Bob")
+    create_user("Bob", {"language": "english"})
     several = start_session("terminal")
     assert {u["slug"] for u in several["users"]} == {"alice", "bob"} and "who they are" in several["next_step"]
 
@@ -137,16 +137,16 @@ def test_start_session(course):
 
 
 def test_start_session_merges_the_preferences_of_the_interface(vault):
-    create_user("Alice", preferences={"tone": "casual", "quizzes": "anywhere"}, interface_preferences={"terminal": {"quizzes": "in the vault"}})
-    assert start_session("terminal")["preferences"] == {"tone": "casual", "quizzes": "in the vault"}
-    assert start_session("app")["preferences"] == {"tone": "casual", "quizzes": "anywhere"}
+    create_user("Alice", {"language": "french", "tone": "casual"}, interface_preferences={"terminal": {"quizzes": "vault"}, "app": {"quizzes": "chat"}})
+    assert start_session("terminal")["preferences"] == {"language": "french", "tone": "casual", "quizzes": "vault"}
+    assert start_session("app")["preferences"] == {"language": "french", "tone": "casual", "quizzes": "chat"}
     assert "no course yet" in start_session("app")["next_step"]
     vault_empty = vault / "users" / "user-alice.md"
     assert vault_empty.is_file()
 
 
 def test_list_projects(course):
-    create_user("Bob")
+    create_user("Bob", {"language": "english"})
     create_project("bob", "Robot", "A robot")
     create_project("alice", "Photo album", "Sort my pictures.")
     update_project("pet-classifier", progress="Dataset collected")
