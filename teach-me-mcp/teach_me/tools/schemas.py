@@ -15,6 +15,9 @@ STRICT = ConfigDict(use_attribute_docstrings=True, extra="forbid")
 
 Grade = Literal["A", "B", "C", "D", "E"]
 QuestionKind = Literal["open", "single", "multiple"]
+StepKind = Literal["class", "quiz", "project"]
+Importance = Literal["core", "optional"]
+CourseStatus = Literal["active", "finished", "abandoned"]
 
 
 @with_config(STRICT)
@@ -98,3 +101,41 @@ class QuestionGrade(TypedDict):
     """Why the right answer is right, and what the student did well or missed, in markdown"""
     grade: NotRequired[Grade]
     """Required for open questions. For closed questions, leave it out to accept the grade proposed by read_exam"""
+
+
+@with_config(DOCUMENTED)
+class PlannedStep(TypedDict):
+    """A step of the plan of a course : a class or an exam to come. The server gives it a slug : pass it as `planned` to save_class or create_exam when the time comes."""
+
+    kind: StepKind
+    """class : a class (save_class). quiz : a quick check of knowledge. project : an exercise on the student's project (create_exam)"""
+    title: str
+    """The title of the class or exam, e.g. 'Convolution by hand'"""
+    description: str
+    """1-2 sentences about what it covers, for the student to check the plan"""
+    skills: list[str]
+    """The slugs of the skills of the course it teaches (class) or evaluates (exam)"""
+    importance: Importance
+    """core : needed for the projects. optional : a side topic the student can skip"""
+    resources: NotRequired[list[str]]
+    """External contents already considered for this step (title and URL), shared with share_resource when the step comes"""
+
+
+@with_config(DOCUMENTED)
+class StepUpdate(TypedDict):
+    """Changes to a step of the plan. Only the keys you give change. Its slug and its kind never change."""
+
+    step: str
+    """The slug of the step"""
+    title: NotRequired[str]
+    """The new title"""
+    description: NotRequired[str]
+    """The new description"""
+    skills: NotRequired[list[str]]
+    """The new list of skills, replacing the current one"""
+    importance: NotRequired[Importance]
+    """The new importance"""
+    resources: NotRequired[list[str]]
+    """The new list of resources, replacing the current one"""
+    move_after: NotRequired[str]
+    """Moves the step after the step with this slug, or first with an empty string"""

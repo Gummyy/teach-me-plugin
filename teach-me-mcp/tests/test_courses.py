@@ -5,6 +5,7 @@ import pytest
 from teach_me.database import objects
 from teach_me.database import vault as vault_io
 from teach_me.errors import ToolError
+from tests.conftest import ONE_STEP
 from teach_me.tools import (
     create_course,
     create_project,
@@ -28,21 +29,22 @@ def test_create_course(course, vault):
     assert document.metadata["user"] == "[[user-alice]]"
     assert document.metadata["projects"] == ["[[project-pet-classifier]]"]
     assert document.metadata["skills"] == ["[[skill-convolution]]", "[[skill-cnn-architecture]]"]
-    assert document.body.startswith("## Content") and document.body.index("## Content") < document.body.index("- Course created")
+    assert document.metadata["status"] == "active"
+    assert document.body.startswith("## Plan") and document.body.index("## Plan") < document.body.index("- Course created")
     assert len(objects.parse_sessions(document.body)) == 1
 
 
 def test_course_slug_defaults_to_the_subject(vault):
     create_user("Alice", {"language": "english"})
     create_skills("alice", [{"name": "arima", "description": ""}])
-    slug = create_course("alice", "Machine learning for time series forecasting.", "", ["arima"])
+    slug = create_course("alice", "Machine learning for time series forecasting.", "", ["arima"], plan=ONE_STEP)["slug"]
     assert slug == "machine-learning-for-time-series"
 
 
 def test_course_needs_skills(vault):
     create_user("Alice", {"language": "english"})
     with pytest.raises(ToolError, match="ALL the skills"):
-        create_course("alice", "Subject", "Level", skills=[])
+        create_course("alice", "Subject", "Level", skills=[], plan=ONE_STEP)
 
 
 def test_course_skills_must_exist_and_belong_to_the_user(vault):
@@ -50,9 +52,9 @@ def test_course_skills_must_exist_and_belong_to_the_user(vault):
     create_user("Bob", {"language": "english"})
     create_skills("bob", [{"name": "Welding", "description": ""}])
     with pytest.raises(ToolError, match="Unknown skill 'nope'.*create_skills"):
-        create_course("alice", "Subject", "Level", ["nope"])
+        create_course("alice", "Subject", "Level", ["nope"], plan=ONE_STEP)
     with pytest.raises(ToolError, match="belongs to 'bob'"):
-        create_course("alice", "Subject", "Level", ["welding"])
+        create_course("alice", "Subject", "Level", ["welding"], plan=ONE_STEP)
 
 
 def test_course_project_must_exist_and_belong_to_the_user(vault):
@@ -62,13 +64,13 @@ def test_course_project_must_exist_and_belong_to_the_user(vault):
     create_skills("alice", [{"name": "a", "description": ""}])
     skills = ["a"]
     with pytest.raises(ToolError, match="Unknown project"):
-        create_course("alice", "Subject", "Level", skills, projects=["nope"])
+        create_course("alice", "Subject", "Level", skills, projects=["nope"], plan=ONE_STEP)
     with pytest.raises(ToolError, match="belongs to 'bob'"):
-        create_course("alice", "Subject", "Level", skills, projects=["robot"])
+        create_course("alice", "Subject", "Level", skills, projects=["robot"], plan=ONE_STEP)
 
 
 def test_list_courses_and_users_activity(course):
-    create_course("alice", "Second course", "", ["convolution"], name="Second")  # skills are shared by the courses of a user
+    create_course("alice", "Second course", "", ["convolution"], name="Second", plan=ONE_STEP)  # skills are shared by the courses of a user
     assert {c["slug"] for c in list_courses("alice")} == {"computer-vision", "second"}
     assert list_users()[0]["last_activity"] is not None
 
@@ -93,19 +95,20 @@ def test_new_session_after_inactivity(course):
 
 
 def test_save_class(course, vault):
-    path = save_class(course, "Convolution", "Definition and kernels", "# Convolution\n\nContent")
-    assert path == "courses/computer-vision/classes/class-convolution.md"
-    document = vault_io.read(vault / path)
+    saved = save_class(course, "Convolution", "Definition and kernels", "# Convolution\n\nContent", planned="convolution")
+    assert saved == {"slug": "convolution", "path": "courses/computer-vision/classes/class-convolution.md", "warnings": []}
+    document = vault_io.read(vault / saved["path"])
     assert document.metadata["title"] == "Convolution"
     assert document.body == "# Convolution\n\nContent"
     assert "Class [[class-convolution|Convolution]]" in get_course_state(course)["sessions"][0]["entries"]
-    assert "1. Class : [[class-convolution|Convolution]]" in objects.get_course(course).body
+    assert "| 1 | [[class-convolution\\|Convolution]] | 📖 class |" in objects.get_course(course).body
+    assert "✅ done" in objects.get_course(course).body
 
 
 def test_same_class_title_gets_a_new_slug(course):
-    first = save_class(course, "Convolution", "", "Content")
-    second = save_class(course, "Convolution", "", "Content")
-    assert first != second and second.endswith("/class-convolution-2.md")
+    first = save_class(course, "Convolution", "", "Content", planned="convolution")
+    second = save_class(course, "Convolution", "", "Content")  # outside the plan
+    assert first["path"] != second["path"] and second["path"].endswith("/class-convolution-2.md")
 
 
 def test_update_project_keeps_its_history(course):

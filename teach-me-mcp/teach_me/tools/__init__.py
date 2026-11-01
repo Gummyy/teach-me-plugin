@@ -5,7 +5,7 @@ registers them on the FastMCP server, wrapped so that they run one at a time (`v
 their docstrings and type hints become the descriptions and the input schemas that the model reads.
 """
 
-from teach_me.tools.courses import create_course, get_course_state, list_courses
+from teach_me.tools.courses import create_course, edit_course, get_course_state, list_courses
 from teach_me.tools.exams import correct_exam, create_exam, grade_questions, read_exam, submit_answers
 from teach_me.tools.project import create_project, list_projects, update_project
 from teach_me.tools.repair import repair_note
@@ -28,6 +28,7 @@ ALL_TOOLS = [
     list_skills,
     edit_skill,
     create_course,
+    edit_course,
     list_courses,
     get_course_state,
     log_session,

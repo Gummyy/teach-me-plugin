@@ -5,13 +5,17 @@ choices. Each question evaluates one or more skills. The tools render the exam f
 solutions hidden, propose a grade for the closed questions and compute the grade of each skill : the
 model writes the questions, grades them (grade_questions) and explains them.
 
-    create_exam -> (submit_answers, when the student answered in the chat) -> read_exam -> grade_questions -> correct_exam
+    answers in the chat : create_exam -> submit_answers -> correct_exam
+    answers in the vault : create_exam -> read_exam -> correct_exam
+
+A long project exam can be graded in several steps with grade_questions before correct_exam.
 """
 
 import json
 from typing import Literal, Optional
 
 from teach_me.database import objects, quiz, vault
+from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.schemas import Question, QuestionGrade
@@ -77,6 +81,37 @@ def _set_status(document: Document, status: str) -> None:
     document.metadata["updated_at"] = vault.format_time(vault.now())
 
 
+def _store_grades(exam: str, grades: list[QuestionGrade]) -> dict[int, dict]:
+    """Checks and stores the grades of some questions, hidden until correct_exam. Returns all the grades stored so far."""
+    document = objects.find_document("exams", exam)
+    questions = _questions(document)
+    if not grades:
+        raise ToolError("Give at least one grade in `grades`.")
+    answers = quiz.parse_answers(document.body, questions)
+    if all(answer is None for answer in answers):
+        raise ToolError("The exam has no answer yet. If the student answered in the chat, call submit_answers first.")
+    proposals = _proposals(questions, answers, _read_solutions(exam))
+    stored = _read_grades(exam)
+    for item in grades:
+        number = _question_number((item or {}).get("question"), questions, "A grade")
+        explanation = str(item.get("explanation") or "").strip()
+        if not explanation:
+            raise ToolError(f"The grade of question {number} has no `explanation`.")
+        grade = item.get("grade")
+        if proposals[number - 1] == "E":
+            grade = "E"  # unanswered
+        elif grade is None and questions[number - 1]["kind"] != "open":
+            grade = proposals[number - 1]
+        if grade not in quiz.GRADES:
+            raise ToolError(f"Question {number} needs a `grade` among : {', '.join(quiz.GRADES)}.")
+        stored[number] = {"grade": grade, "explanation": explanation}
+
+    file = _grades_file(exam)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text(json.dumps({str(n): stored[n] for n in sorted(stored)}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    return stored
+
+
 def create_exam(
     course: str,
     title: str,
@@ -84,8 +119,9 @@ def create_exam(
     questions: list[Question],
     intro: Optional[str] = None,
     project: Optional[str] = None,
+    planned: Optional[str] = None,
 ) -> dict:
-    """Creates an exam with the status "assigned" and writes it in the vault, ready to be answered. It is added to the content of the course.
+    """Creates an exam with the status "assigned" and writes it in the vault, ready to be answered. Its progress shows in the plan of the course.
 
     The tool numbers the questions, labels the options A, B, C, ... and keeps the solutions hidden from the student.
 
@@ -96,9 +132,10 @@ def create_exam(
         questions (list[Question]): The questions, in order. Each evaluates one or more skills of the course, given by their slugs
         intro (Optional[str]): A short context shown before the questions, in markdown. Defaults to None.
         project (Optional[str]): For a project exam, the slug of the project it builds towards. Defaults to None.
+        planned (Optional[str]): The slug of the quiz or project step of the plan this exam is, from get_course_state's `plan.next_steps`. Leave it out only for an exam the plan didn't foresee : it is then added to the plan, with a warning. Defaults to None.
 
     Returns:
-        dict: {"slug", "path", "questions"} : the slug of the exam, its path relative to the vault, and the number of questions
+        dict: {"slug", "path", "questions", "warnings"} : the slug of the exam, its path relative to the vault, the number of questions, and the warnings (an exam outside the plan, planned skills it doesn't evaluate)
     """
     course_document = objects.get_course(course)
     if type not in objects.EXAM_TYPES:
@@ -113,7 +150,16 @@ def create_exam(
         for skill in skills
     }
 
-    path = objects.new_document_path(course, "exams", title, exam_type=type)
+    warnings = []
+    if planned is not None:
+        step = plans.planned_step(course_document, planned, type)
+        missing = [skill for skill in step["skills"] if skill not in skills]
+        if missing:
+            warnings.append(f"The plan expected this exam to evaluate {', '.join(missing)} too : evaluate them in a later exam, or update the step with edit_course.")
+    else:
+        step, warning = plans.add_unplanned(course_document, type, title, (intro or "").strip()[:200], skills)
+        warnings.append(warning)
+    path = objects.step_file(course, step)
     exam = objects.slug(path)
     label = objects.current_session(course_document)
     moment = vault.format_time(vault.now())
@@ -135,10 +181,10 @@ def create_exam(
     solutions_file.write_text(json.dumps(solutions, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
 
     exam_link = objects.link("exam", exam, path, alias=title)
-    objects.add_to_content(course_document, f"{'Quiz' if type == 'quiz' else 'Exercise'} : {exam_link}")
     objects.append_to_session(course_document, f"Exam {exam_link} assigned ({type}, {len(public)} questions)")
+    plans.render(course_document)
     vault.write(course_document)
-    return {"slug": exam, "path": vault.relative(path), "questions": len(public)}
+    return {"slug": exam, "path": vault.relative(path), "questions": len(public), "warnings": warnings}
 
 
 def submit_answers(exam: str, answers: list[str]) -> dict:
@@ -149,7 +195,7 @@ def submit_answers(exam: str, answers: list[str]) -> dict:
         answers (list[str]): One answer per question : "B" or "A, C" for a closed question, the text for an open one, "" when unanswered
 
     Returns:
-        dict: {"slug", "status", "answers", "proposed_grades"} : the answers as recorded, and the grade proposed for each question (see read_exam)
+        dict: what read_exam returns, without the content of the exam (you just wrote it) : the answers as recorded, the solutions and the grade proposed for each question. Grade it with correct_exam right away.
     """
     document = objects.find_document("exams", exam)
     questions = _questions(document)
@@ -158,7 +204,9 @@ def submit_answers(exam: str, answers: list[str]) -> dict:
     _set_status(document, "filled")
     vault.write(document)
     _grades_file(exam).unlink(missing_ok=True)  # graded on other answers
-    return {"slug": exam, "status": "filled", "answers": given, "proposed_grades": _proposals(questions, given, _read_solutions(exam))}
+    view = read_exam(exam)
+    view.pop("content")
+    return view
 
 
 def read_exam(exam: str) -> dict:
@@ -198,7 +246,7 @@ def read_exam(exam: str) -> dict:
 
 
 def grade_questions(exam: str, grades: list[QuestionGrade]) -> dict:
-    """Grades questions of an exam, before correct_exam. Can be called several times, e.g. to grade a long project exam question by question : grading a question again replaces its grade. The grades stay hidden until correct_exam.
+    """Grades some questions of an exam, before correct_exam : only useful to grade a long project exam in several steps, otherwise give the grades to correct_exam directly. Can be called several times : grading a question again replaces its grade. The grades stay hidden until correct_exam.
 
     Every question needs an explanation. Open questions need a grade. Closed questions take the grade proposed by read_exam when you leave it out, but you can change it (e.g. B instead of A when the question was trivial for the options ticked). An unanswered question always gets E.
 
@@ -209,43 +257,22 @@ def grade_questions(exam: str, grades: list[QuestionGrade]) -> dict:
     Returns:
         dict: {"graded", "ungraded"} : the questions graded so far ([{"question", "grade"}]), and the numbers of the ones still to grade before correct_exam
     """
-    document = objects.find_document("exams", exam)
-    questions = _questions(document)
-    if not grades:
-        raise ToolError("Give at least one grade in `grades`.")
-    answers = quiz.parse_answers(document.body, questions)
-    if all(answer is None for answer in answers):
-        raise ToolError("The exam has no answer yet. If the student answered in the chat, call submit_answers first.")
-    proposals = _proposals(questions, answers, _read_solutions(exam))
-    stored = _read_grades(exam)
-    for item in grades:
-        number = _question_number((item or {}).get("question"), questions, "A grade")
-        explanation = str(item.get("explanation") or "").strip()
-        if not explanation:
-            raise ToolError(f"The grade of question {number} has no `explanation`.")
-        grade = item.get("grade")
-        if proposals[number - 1] == "E":
-            grade = "E"  # unanswered
-        elif grade is None and questions[number - 1]["kind"] != "open":
-            grade = proposals[number - 1]
-        if grade not in quiz.GRADES:
-            raise ToolError(f"Question {number} needs a `grade` among : {', '.join(quiz.GRADES)}.")
-        stored[number] = {"grade": grade, "explanation": explanation}
-
-    file = _grades_file(exam)
-    file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(json.dumps({str(n): stored[n] for n in sorted(stored)}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    stored = _store_grades(exam, grades)
+    count = len(_questions(objects.find_document("exams", exam)))
     return {
         "graded": [{"question": number, "grade": stored[number]["grade"]} for number in sorted(stored)],
-        "ungraded": [number for number in range(1, len(questions) + 1) if number not in stored],
+        "ungraded": [number for number in range(1, count + 1) if number not in stored],
     }
 
 
-def correct_exam(exam: str, comments: Optional[dict[str, str]] = None) -> dict:
-    """Corrects an exam once every question is graded (grade_questions) : computes the grade of each skill and appends the correction to the exam file. The exam itself is never rewritten.
+def correct_exam(exam: str, grades: Optional[list[QuestionGrade]] = None, comments: Optional[dict[str, str]] = None) -> dict:
+    """Grades and corrects an exam : computes the grade of each skill and appends the correction to the exam file. The exam itself is never rewritten.
+
+    Every question needs an explanation. Open questions need a grade. Closed questions take the grade proposed by read_exam / submit_answers when you leave it out, but you can change it (e.g. B instead of A when the question was trivial for the options ticked). An unanswered question always gets E.
 
     Args:
         exam (str): The slug of the exam
+        grades (Optional[list[QuestionGrade]]): The grades of the questions : all of them, or the ones not graded yet with grade_questions. Defaults to None.
         comments (Optional[dict[str, str]]): A short comment for each evaluated skill, by slug. Defaults to None.
 
     Returns:
@@ -254,10 +281,10 @@ def correct_exam(exam: str, comments: Optional[dict[str, str]] = None) -> dict:
     document = objects.find_document("exams", exam)
     questions = _questions(document)
     solutions = _read_solutions(exam)
-    stored = _read_grades(exam)
+    stored = _store_grades(exam, grades) if grades else _read_grades(exam)
     ungraded = [number for number in range(1, len(questions) + 1) if number not in stored]
     if ungraded:
-        raise ToolError(f"Grade the question(s) {', '.join(map(str, ungraded))} with grade_questions first.")
+        raise ToolError(f"The question(s) {', '.join(map(str, ungraded))} have no grade : give them in `grades`.")
     answers = quiz.parse_answers(document.body, questions)
     grades = [stored[number]["grade"] for number in range(1, len(questions) + 1)]
     explanations = [stored[number]["explanation"] for number in range(1, len(questions) + 1)]
@@ -285,6 +312,7 @@ def correct_exam(exam: str, comments: Optional[dict[str, str]] = None) -> dict:
     counts = ", ".join(f"{grades.count(grade)} {grade}" for grade in quiz.GRADES if grade in grades)
     course_document = objects.get_course(objects.document_course(document))
     objects.append_to_session(course_document, f"Exam {objects.link('exam', exam, document.path)} corrected : {counts} (mean {mean}/5)")
+    plans.render(course_document)
     vault.write(course_document)
     return {
         "grades": grades,

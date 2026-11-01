@@ -41,3 +41,29 @@ def test_journey_through_the_client(vault):
     assert users.data[0]["slug"] == "alice"
     assert failure.is_error
     assert "Known users : alice" in failure.content[0].text
+
+
+def test_a_planned_course_through_the_client(vault):
+    step = {"kind": "class", "title": "Kernels", "description": "What a kernel is", "skills": ["convolution"], "importance": "core"}
+    quiz = {"kind": "quiz", "title": "Kernels quiz", "description": "", "skills": ["convolution"], "importance": "core"}
+    question = {"kind": "open", "text": "What is a kernel ?", "skills": ["convolution"], "expected_answer": "A small matrix"}
+
+    async def scenario():
+        async with Client(mcp) as client:
+            await client.call_tool("create_user", {"name": "Alice", "preferences": {"language": "english"}})
+            await client.call_tool("create_skills", {"user": "alice", "skills": [{"name": "convolution", "description": "Computes a convolution"}]})
+            created = await client.call_tool("create_course", {"user": "alice", "subject": "Vision", "starting_level": "", "skills": ["convolution"], "plan": [step, quiz], "name": "Vision"})
+            edited = await client.call_tool("edit_course", {"course": "vision", "update_steps": [{"step": "kernels-quiz", "move_after": "", "importance": "optional"}]})
+            await client.call_tool("save_class", {"course": "vision", "title": "Kernels", "summary": "", "content": "A class", "planned": "kernels"})
+            exam = await client.call_tool("create_exam", {"course": "vision", "title": "Kernels quiz", "type": "quiz", "questions": [question], "planned": "kernels-quiz"})
+            await client.call_tool("submit_answers", {"exam": "kernels-quiz", "answers": ["A small matrix"]})
+            corrected = await client.call_tool("correct_exam", {"exam": "kernels-quiz", "grades": [{"question": 1, "grade": "A", "explanation": "Right"}]})
+            state = await client.call_tool("get_course_state", {"course": "vision"})
+            return created, edited, exam, corrected, state
+
+    created, edited, exam, corrected, state = run(scenario())
+    assert [s["slug"] for s in created.data["plan"]] == ["kernels", "kernels-quiz"]
+    assert [s["slug"] for s in edited.data["plan"]] == ["kernels-quiz", "kernels"]
+    assert exam.data["warnings"] == [] and corrected.data["grades"] == ["A"]
+    assert state.data["plan"]["done"] == 2 and state.data["plan"]["next_steps"] == []
+    assert not (vault / ".teach-me" / "lock").exists()

@@ -3,6 +3,7 @@
 from typing import Optional
 
 from teach_me.database import objects, vault
+from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.courses import get_course_state, list_courses
@@ -48,10 +49,18 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
     if owner != user:
         raise ToolError(f"The course '{course}' belongs to '{owner}', not to '{user}'.")
     objects.append_to_session(document, f"Session in the {interface}")
+    plans.render(document)  # a course created before the plans gets one
     vault.write(document)
     state = get_course_state(course)
-    step = " ".join(state["progress"]["advice"]) or "Continue the course where the last session stopped."
-    return {**result, "course": state, "next_step": f"Remind the student where they are in a couple of sentences. {step}"}
+    steps = [" ".join(state["progress"]["advice"]) or "Continue the course where the last session stopped."]
+    upcoming = state["plan"]["next_steps"]
+    if upcoming:
+        steps.append(f"Next step of the plan : the {upcoming[0]['kind']} '{upcoming[0]['title']}' : pass planned=\"{upcoming[0]['slug']}\" to save_class or create_exam.")
+    else:
+        steps.append("Every step of the plan is done : propose new steps (edit_course `add_steps`), or mark the course finished (edit_course `status`).")
+    if state["status"] != "active":
+        steps.insert(0, f"This course is {state['status']} : ask the student whether they want to resume it (edit_course status=\"active\").")
+    return {**result, "course": state, "next_step": f"Remind the student where they are in a couple of sentences. {' '.join(steps)}"}
 
 
 def log_session(course: str, entry: str) -> str:
@@ -74,24 +83,31 @@ def log_session(course: str, entry: str) -> str:
     return label
 
 
-def save_class(course: str, title: str, summary: str, content: str) -> str:
-    """Saves the content of a class that has just been taught.
+def save_class(course: str, title: str, summary: str, content: str, planned: Optional[str] = None) -> dict:
+    """Saves the content of a class, before presenting it.
 
     Args:
         course (str): The slug of the course
         title (str): The title of the class
-        summary (str): 2-4 sentences about what has been taught
+        summary (str): 2-4 sentences about what is taught
         content (str): The class itself, in markdown
+        planned (Optional[str]): The slug of the class step of the plan this class is, from get_course_state's `plan.next_steps`. Leave it out only for a class the plan didn't foresee : it is then added to the plan, with a warning. Defaults to None.
 
     Returns:
-        str: The path of the class file, relative to the vault
+        dict: {"slug", "path", "warnings"} : the slug of the class, its path relative to the vault, and the warnings (e.g. a class outside the plan)
     """
     if not (title or "").strip():
         raise ToolError("The class needs a non empty `title`.")
     if not (content or "").strip():
         raise ToolError("The class `content` is empty : send the class itself, in markdown.")
     course_document = objects.get_course(course)
-    path = objects.new_document_path(course, "classes", title)
+    warnings = []
+    if planned is not None:
+        step = plans.planned_step(course_document, planned, "class")
+    else:
+        step, warning = plans.add_unplanned(course_document, "class", title.strip(), (summary or "").strip(), [])
+        warnings.append(warning)
+    path = objects.step_file(course, step)
     label = objects.current_session(course_document)
     vault.write(
         Document(
@@ -106,7 +122,7 @@ def save_class(course: str, title: str, summary: str, content: str) -> str:
         )
     )
     class_link = objects.link("class", objects.slug(path), path, alias=title.strip())
-    objects.add_to_content(course_document, f"Class : {class_link}")
     objects.append_to_session(course_document, f"Class {class_link}")
+    plans.render(course_document)
     vault.write(course_document)
-    return vault.relative(path)
+    return {"slug": step["slug"], "path": vault.relative(path), "warnings": warnings}

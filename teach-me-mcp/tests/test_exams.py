@@ -50,8 +50,8 @@ def _correct(slug, answers, grades=GRADES, **kwargs):
 
 
 def test_create_exam_renders_the_questions_and_hides_the_solutions(course, vault):
-    exam = _create(course, intro="A quick check.")
-    assert exam == {"slug": "convolution-quiz", "path": "courses/computer-vision/exams/quiz-convolution-quiz.md", "questions": 3}
+    exam = _create(course, intro="A quick check.", planned="convolution-quiz")
+    assert exam == {"slug": "convolution-quiz", "path": "courses/computer-vision/exams/quiz-convolution-quiz.md", "questions": 3, "warnings": []}
     document = vault_io.read(vault / exam["path"])
     assert document.metadata["status"] == "assigned"
     assert document.metadata["skills"] == [
@@ -67,15 +67,16 @@ def test_create_exam_renders_the_questions_and_hides_the_solutions(course, vault
     assert solutions == [["A"], ["A", "B"], OPEN["expected_answer"]]
     state = get_course_state(course)
     assert state["pending_exams"][0]["slug"] == "convolution-quiz"
-    assert "1. Quiz : [[quiz-convolution-quiz|Convolution quiz]]" in objects.get_course(course).body
+    assert "| 2 | [[quiz-convolution-quiz\\|Convolution quiz]] | ❓ quiz |" in objects.get_course(course).body
+    assert get_course_state(course)["plan"]["next_steps"][1]["progress"] == "in progress"
 
 
 def test_exam_slugs_are_unique_across_quizzes_and_project_exams(course, vault):
-    _create(course)
+    _create(course, planned="convolution-quiz")
     exercise = _create(course, [OPEN], type="project", project="pet-classifier")
     assert exercise["slug"] == "convolution-quiz-2" and exercise["path"].endswith("/exams/exercise-convolution-quiz-2.md")
     assert vault_io.read(vault / exercise["path"]).metadata["project"] == "[[project-pet-classifier]]"
-    assert "2. Exercise : [[exercise-convolution-quiz-2|Convolution quiz]]" in objects.get_course(course).body
+    assert "[[exercise-convolution-quiz-2\\|Convolution quiz]] | 🛠️ project |" in objects.get_course(course).body
     with pytest.raises(ToolError, match="Unknown project 'nope'"):
         _create(course, [OPEN], type="project", project="nope")
 
@@ -160,14 +161,14 @@ def test_questions_are_graded_before_the_correction(course, vault):
     with pytest.raises(ToolError, match="no answer yet.*submit_answers"):
         grade_questions(slug, [{**GRADES[2], "question": 1}])
     submit_answers(slug, ["a", "b"])
-    with pytest.raises(ToolError, match=r"question\(s\) 1, 2 with grade_questions"):
+    with pytest.raises(ToolError, match=r"question\(s\) 1, 2 have no grade"):
         correct_exam(slug)
     assert grade_questions(slug, [{**GRADES[2], "question": 1}])["ungraded"] == [2]
     grade_questions(slug, [{**GRADES[2], "question": 2, "grade": "D"}])
     assert grade_questions(slug, [{**GRADES[2], "question": 2, "grade": "A"}])["ungraded"] == []  # grading again replaces
     assert correct_exam(slug)["grades"] == ["B", "A"]
     assert not (vault / ".teach-me" / "grades" / f"{slug}.json").exists()  # a retake is graded again
-    with pytest.raises(ToolError, match="grade_questions first"):
+    with pytest.raises(ToolError, match="have no grade"):
         correct_exam(slug)
 
 
@@ -250,3 +251,35 @@ def test_difficulty_follows_the_mean(course, answers, advice):
 def test_unknown_exam(course):
     with pytest.raises(ToolError, match="Unknown exam"):
         read_exam("nope")
+
+
+def test_correct_exam_grades_in_one_call(course):
+    slug = _create(course, planned="convolution-quiz")["slug"]
+    submitted = submit_answers(slug, ["A", "A, B", "Convolutions then a dense layer."])
+    assert "content" not in submitted  # the model just wrote it
+    assert submitted["proposed_grades"] == ["A", "A", None] and submitted["solutions"][2] == OPEN["expected_answer"]
+    result = correct_exam(slug, grades=GRADES, comments={"convolution": "Solid"})
+    assert result["grades"] == ["A", "A", "B"]
+    plan = get_course_state(course)["plan"]
+    assert plan["done"] == 1 and plan["next_steps"][0]["slug"] == "convolution"  # the class of the plan is still to do
+    assert "✅ done" in objects.get_course(course).body
+
+
+def test_correct_exam_completes_the_grades_given_before(course):
+    slug = _create(course, [{**OPEN, "text": "First"}, {**OPEN, "text": "Second"}])["slug"]
+    submit_answers(slug, ["a", "b"])
+    grade_questions(slug, [{**GRADES[2], "question": 1}])  # a long project exam, graded in several steps
+    with pytest.raises(ToolError, match=r"question\(s\) 2 have no grade"):
+        correct_exam(slug, grades=[{**GRADES[2], "question": 1, "grade": "C"}])
+    assert correct_exam(slug, grades=[{**GRADES[2], "question": 2, "grade": "A"}])["grades"] == ["C", "A"]
+
+
+def test_planned_exam_must_match_its_step(course):
+    with pytest.raises(ToolError, match="'convolution-quiz' is a quiz, not a project"):
+        _create(course, [OPEN], type="project", planned="convolution-quiz")
+    with pytest.raises(ToolError, match="Unknown step 'nope'.*convolution-quiz \\(quiz\\)"):
+        _create(course, planned="nope")
+    exam = _create(course, [SINGLE], title="First CNN", type="project", planned="first-cnn")
+    assert exam["warnings"] == ["The plan expected this exam to evaluate cnn-architecture too : evaluate them in a later exam, or update the step with edit_course."]
+    with pytest.raises(ToolError, match="already has its document"):
+        _create(course, [SINGLE], title="Again", type="project", planned="first-cnn")

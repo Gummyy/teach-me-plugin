@@ -3,7 +3,7 @@
     users/user-<user>.md
     projects/project-<project>.md
     skills/skill-<skill>.md                        (owned by a user, shared by their courses)
-    courses/<course>/course-<course>.md            (links to its skills, ordered content and the session log)
+    courses/<course>/course-<course>.md            (links to its skills, its plan and the session log)
     courses/<course>/classes/class-<class>.md
     courses/<course>/exams/quiz-<exam>.md          (evaluations in the frontmatter)
     courses/<course>/exams/exercise-<exam>.md      (project exams)
@@ -29,7 +29,11 @@ SESSION_TIMEOUT = timedelta(hours=3)
 """A new session starts when the last activity on a course is older than this."""
 SESSION_HEADING = re.compile(r"^## (\d{4}-\d{2}-\d{2} \d{2}:\d{2})[ \t]*$", re.MULTILINE)
 CONTENT_HEADING = "## Content"
-"""The section of course.md listing its classes and exams, in order. It comes before the session log."""
+"""The section that listed the classes and exams of a course before the plan replaced it."""
+PLAN_HEADING = "## Plan"
+"""The section of course.md showing its plan as a table. It comes before the session log."""
+STEP_FOLDERS = {"class": "classes", "quiz": "exams", "project": "exams"}
+"""Folder of the document of each kind of step of a plan."""
 EXAM_TYPES = ("quiz", "project")
 EXAM_STATUSES = ("assigned", "filled", "corrected")
 EXAM_COEFFICIENTS = {"quiz": 1, "project": 2}
@@ -258,19 +262,32 @@ def course_skills(course: Document) -> list[str]:
     return [unlink(skill) for skill in course.metadata.get("skills") or [] if isinstance(skill, str)]
 
 
-def add_to_content(course: Document, entry: str) -> None:
-    """Appends a numbered entry to the "## Content" section of a course. The caller must write the document."""
-    body = course.body
-    if CONTENT_HEADING not in body:
-        body = f"{CONTENT_HEADING}\n\n{body.lstrip()}"
-    start = body.index(CONTENT_HEADING) + len(CONTENT_HEADING)
-    following = re.search(r"^## ", body[start:], re.MULTILINE)
-    end = start + following.start() if following else len(body)
-    section = body[start:end].strip("\n")
-    number = len(re.findall(r"^\d+\. ", section, re.MULTILINE)) + 1
-    section = f"{section}\n{number}. {entry}".strip("\n")
-    rest = body[end:].lstrip("\n")
-    course.body = f"{body[:start]}\n\n{section}\n" + (f"\n{rest}" if rest else "")
+def step_prefix(kind: str) -> str:
+    """File prefix of the document of a step : class-, quiz- or exercise-."""
+    return PREFIXES["class"] if kind == "class" else EXAM_PREFIXES[kind]
+
+
+def step_file(course: str, step: dict) -> Path:
+    """Where the document of a step of the plan is, or will be."""
+    return courses_dir() / course / STEP_FOLDERS[step["kind"]] / f"{step_prefix(step['kind'])}{step['slug']}.md"
+
+
+def section(body: str, heading: str) -> Optional[tuple[int, int]]:
+    """Start and end of a "## " section of a body, heading included, or None."""
+    match = re.search(rf"^{re.escape(heading)}[ \t]*$", body, re.MULTILINE)
+    if match is None:
+        return None
+    following = re.search(r"^## ", body[match.end():], re.MULTILINE)
+    return match.start(), match.end() + following.start() if following else len(body)
+
+
+def legacy_content(body: str) -> list[tuple[str, Optional[str]]]:
+    """The (file name, alias) of the notes linked in the "## Content" section of a course created before the plans."""
+    bounds = section(body, CONTENT_HEADING)
+    if bounds is None:
+        return []
+    links = re.findall(r"\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]", body[bounds[0]:bounds[1]])
+    return list(dict.fromkeys((stem.strip(), alias.strip() or None) for stem, alias in links))
 
 
 # --------------------------------------------------------------------------- #
@@ -332,21 +349,6 @@ def _document_prefixes(kind: str) -> list[str]:
     return [PREFIXES["class"]] if kind == "classes" else list(EXAM_PREFIXES.values())
 
 
-def new_document_path(course: str, kind: str, title: str, exam_type: Optional[str] = None) -> Path:
-    """Path of a new class / exam : courses/<course>/<kind>/<prefix><title>.md
-
-    Slugs are unique in the whole vault (across courses, and across quizzes and project exams), so that
-    tools can find a document from its slug only. The date of the document is in its frontmatter.
-    """
-    prefixes = _document_prefixes(kind)
-    candidate = vault.unique_slug(
-        vault.slugify(title),
-        lambda candidate: any(any(courses_dir().glob(f"*/{kind}/{prefix}{candidate}.md")) for prefix in prefixes),
-    )
-    prefix = EXAM_PREFIXES[exam_type] if kind == "exams" else PREFIXES["class"]
-    return courses_dir() / course / kind / f"{prefix}{candidate}.md"
-
-
 def find_document(kind: str, target: str) -> Document:
     matches = sorted(path for prefix in _document_prefixes(kind) for path in courses_dir().glob(f"*/{kind}/{prefix}{target}.md"))
     if not matches:
@@ -362,17 +364,11 @@ def document_course(document: Document) -> str:
 
 
 def content_order(course: str) -> dict[str, int]:
-    """Position of each note linked in the "## Content" section of a course, by file name."""
-    body = get_course(course).body
-    if CONTENT_HEADING not in body:
-        return {}
-    section = body[body.index(CONTENT_HEADING) + len(CONTENT_HEADING):]
-    following = re.search(r"^## ", section, re.MULTILINE)
-    section = section[: following.start()] if following else section
-    order: dict[str, int] = {}
-    for stem in re.findall(r"\[\[([^\]|#]+)", section):
-        order.setdefault(stem.strip(), len(order))
-    return order
+    """Position of each class and exam in the plan of a course (or its old "## Content" section), by file name."""
+    document = get_course(course)
+    plan = [step for step in document.metadata.get("plan") or [] if isinstance(step, dict) and step.get("kind") in STEP_FOLDERS]
+    stems = [f"{step_prefix(step['kind'])}{step.get('slug')}" for step in plan] or [stem for stem, _ in legacy_content(document.body)]
+    return {stem: index for index, stem in enumerate(dict.fromkeys(stems))}
 
 
 def iter_documents(course: str, kind: str) -> Iterator[Document]:

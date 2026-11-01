@@ -2,6 +2,7 @@ import pytest
 
 from teach_me.database import objects
 from teach_me.errors import ToolError
+from tests.conftest import ONE_STEP
 from teach_me.tools import correct_exam, create_course, create_exam, create_skills, create_user, edit_skill, grade_questions, list_skills, report_card, submit_answers
 
 QUESTION = {"kind": "single", "text": "?", "skills": ["convolution"], "options": ["Yes", "No"], "correct_options": ["A"]}
@@ -20,7 +21,7 @@ def test_unknown_skill_lists_the_skills_of_the_user_only(course):
     create_user("Bob", {"language": "english"})
     create_skills("bob", [{"name": "Welding", "description": ""}])
     with pytest.raises(ToolError, match="Known skills : cnn-architecture, convolution\\."):
-        create_course("alice", "Subject", "Level", ["nope"])
+        create_course("alice", "Subject", "Level", ["nope"], plan=ONE_STEP)
 
 
 def test_create_skills_checks_its_arguments(vault):
@@ -60,7 +61,7 @@ def test_edit_skill(course):
 
 
 def test_a_skill_shared_by_two_courses_has_one_history(course):
-    second = create_course("alice", "Image processing", "", ["convolution"], name="Image processing")
+    second = create_course("alice", "Image processing", "", ["convolution"], name="Image processing", plan=ONE_STEP)["slug"]
     first_exam = create_exam(course, "First", "quiz", [QUESTION])["slug"]
     second_exam = create_exam(second, "Second", "quiz", [QUESTION])["slug"]
     for exam, answer in ((first_exam, "B"), (second_exam, "A")):
