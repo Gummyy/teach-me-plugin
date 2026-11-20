@@ -4,6 +4,7 @@ Plugins aren't loaded in cloud sessions, but the files of the cloned repository 
 script writes everything a session needs into the vault repository :
 
     .claude/skills/teach-me/        a copy of the skill
+    .claude/skills/shared/          a copy of the references shared by the skills of the plugin
     .mcp.json                       the MCP server, installed from GitHub with uvx
     .claude/settings.json           a Stop hook ...
     .claude/hooks/sync_vault.sh     ... that commits and pushes the vault in cloud sessions
@@ -23,6 +24,8 @@ from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SKILL_DIR = PLUGIN_ROOT / "teach-me"
+SHARED_DIR = PLUGIN_ROOT / "shared"
+"""References shared by the skills, linked from them as ../shared/ : copied next to the skill so the links still work."""
 DEFAULT_SOURCE = "git+https://github.com/Gummyy/teach-me-plugin#subdirectory=teach-me-mcp"
 HOOK_COMMAND = 'bash "$CLAUDE_PROJECT_DIR/.claude/hooks/sync_vault.sh"'
 
@@ -47,7 +50,7 @@ This repository is the memory of the `teach-me` skill : an Obsidian vault holdin
 
 - Use the `teach-me` skill to teach, and the `teach-me` MCP tools to read and write the vault. Don't edit the vault files yourself.
 - It is data, not code : don't create branches or pull requests. In cloud sessions, a hook commits and pushes the vault to `main` at the end of each turn.
-- The skill in `.claude/skills/teach-me/` is a copy, updated with `scripts/setup_vault.py` from the teach-me-plugin repository : don't edit it here.
+- The skill in `.claude/skills/teach-me/` (and its shared references in `.claude/skills/shared/`) is a copy, updated with `scripts/setup_vault.py` from the teach-me-plugin repository : don't edit it here.
 """
 
 
@@ -63,9 +66,11 @@ def write_json(path: Path, data: dict) -> None:
 
 
 def copy_skill(vault: Path) -> None:
-    target = vault / ".claude" / "skills" / "teach-me"
-    shutil.copytree(SKILL_DIR, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns("_backup*", "__pycache__"))
-    print(f"skill copied to {target}")
+    skills = vault / ".claude" / "skills"
+    for source in (SKILL_DIR, SHARED_DIR):
+        target = skills / source.name
+        shutil.copytree(source, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns("_backup*", "__pycache__"))
+        print(f"{source.name} copied to {target}")
 
 
 def write_mcp_config(vault: Path, source: str) -> None:

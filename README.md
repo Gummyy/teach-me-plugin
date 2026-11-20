@@ -4,7 +4,8 @@ A Claude Code plugin that turns Claude into a teacher who remembers you : classe
 
 | Path                       | Content                                                              |
 | -------------------------- | -------------------------------------------------------------------- |
-| `teach-me/`                | The skill : pedagogy, diagrams, evaluation (`SKILL.md` + references) |
+| `teach-me/`                | The skill : teaching one student, through the MCP tools              |
+| `shared/`                  | The references shared by the skills : pedagogy, diagrams, exams      |
 | `teach-me-mcp/`            | The MCP server : the memory of the teacher, stored in the vault      |
 | `.claude-plugin/`          | The plugin manifest and the marketplace that lists it                |
 | `scripts/setup_vault.py`   | Makes a vault usable in cloud sessions (see below)                   |
@@ -44,7 +45,7 @@ python scripts/setup_vault.py /path/to/your/vault
 
 writes into the vault :
 
-- `.claude/skills/teach-me/` : a copy of the skill (run the script again after changing the skill)
+- `.claude/skills/teach-me/` and `.claude/skills/shared/` : a copy of the skill and of its shared references (run the script again after changing them)
 - `.mcp.json` : the MCP server, installed from this repository with `uvx`
 - `.claude/settings.json` + `.claude/hooks/sync_vault.sh` : at the end of each turn of a cloud session, commits the vault and pushes it to `main`, otherwise the session's changes would be lost with its machine
 - `CLAUDE.md` : tells Claude what the vault is

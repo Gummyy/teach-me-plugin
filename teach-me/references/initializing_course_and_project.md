@@ -50,43 +50,7 @@ In order to initialize a course, you must ask questions to your student until yo
 - what does the student already know ?
 - what is the student's project ? If they have no precise project, propose some examples until they pick one. It is always better if the student likes their project as it is going to be their main source of motivation ! Refer to the [initializing a project](#initializing-a-project) reference !
 
-Then list **all** the skills that the student will validate during this course (it can range from ~5 to ~100), with a one sentence description each, and check the list with the student. The student may not be able to validate the skills because they don't know many of the concepts you are about to teach them, but they must confirm that they believe you have successfully targeted what they want to learn.
-
-### Determining the skills of a course
-
-Exams can only evaluate the skills declared here, so take your time, as this is a very important step !
-Here are the keys to properly choosing the skills associated with a course :
-- Evaluate all the relevant concepts. You don't have to create a skill for all the side content / very specific examples you mention during a class, but the core concepts MUST be evaluated at least once.
-- Evaluate the most important concepts multiple times. If it is relevant, you can have multiple skills evaluating the same concept with increasing difficulty. Repetition helps students generalize more efficiently and helps them be more confident that they have really validated a skill.
-- Define a realistic progression. Your student may have great aspirations but start from a very modest level. Be sure that you accompany them along the way at the cadence that best fits their progression. In most cases, the number of skills shouldn't go past 50, but in some cases, you may need to use much more to properly accompany your student !
-- Use skills that matter for the projects. Be driven by the needs of the projects. It is OK if some skills don't relate completely to the course, but it is not OK if some skills don't relate to the projects or if the student can't finish it with your lessons. If there are lots of skills that are essential for the projects which clearly don't belong to the courses, tell the student as they may not realize that they didn't target the appropriate skills for their project. The outcome of that discussion should be either :
-    1. you change the definition of the current course / project
-    2. you create a new and more suitable course / project
-- Go further than the project. If your student can accomplish harder tasks than the project, than they will be more confident that they can build their project. It is therefore advisable to go a bit further so they can practise on harder problems than what their project requires.
-
-#### Example list of skills for a SQL course
-
-1. Simple Select queries
-  1. Using the SELECT keyword
-  2. Using the FROM keyword
-  3. Using the WHERE keyword
-2. Select queries on different tables
-  1. Understanding the different types of JOIN
-  2. Using JOIN with SELECT queries
-3. Working with aggregation
-  1. Using the GROUP BY keyword
-  2. Using the HAVING keyword
-  3. Using complex queries with aggregation
-
-As you can see in that example, the 2.x and 3.x skills imply using the skills developed in the 1.x section. It is ok to repeat these skills because they are important the progression is very natural.
-
-#### Questions to ask yourself before validating the skills of a course
-
-- Do I cover the important concepts of the course ?
-- Do I sufficiently cover the most important ones ?
-- Does the progression feel natural with the current level of the student up until the completion of their projects ?
-- Can the student build their projects if they have validated all their skills ?
-- Will the student need to validate most of their skills to build their projects ?
+Then choose **all** the skills that the student will validate during this course, following [the teaching reference](../../shared/teaching.md#choosing-the-skills-of-a-course), and check the list with the student. The student may not be able to validate the skills because they don't know many of the concepts you are about to teach them, but they must confirm that they believe you have successfully targeted what they want to learn. If many skills essential to their project don't belong to the course, tell them, as they may not realize it : the outcome is a new definition of the course or the project, or a new and more suitable course or project.
 
 Once you have gathered all these info :
 1. call `list_skills` : the student may already have some of these skills from another course. Reuse them, so that their marks follow the student from one course to the next.
@@ -96,14 +60,6 @@ Once you have gathered all these info :
 
 ### Planning the course
 
-Before creating the course, think it all the way through : propose the sequence of **every** class and exam, from the first class to the last project exam. Each step has a kind (`class`, `quiz` or `project`), a title, a one or two sentences description, the skills it teaches or evaluates, an importance (`core` when the projects need it, `optional` for a side topic the student can skip) and, when you already have some in mind, the external resources it will use.
+Plan the course following [the teaching reference](../../shared/teaching.md#planning-a-course). Each step has a kind : `class`, `quiz` or `project`. Present the plan to the student and validate it with them before calling `create_course`.
 
-Present the plan to the student as a short table, and ask whether it matches what they expect. They may spot a misunderstanding of what they want to learn, a topic they already know, or something missing : now is the cheapest moment to fix it. Even when they change nothing, the plan shows them where they are going.
-
-A good plan :
-- evaluates every skill of the course in at least one exam, the most important ones several times,
-- has an exercise at least every 3 classes,
-- alternates presentations of the concepts and deep dives (see the general rules of the skill),
-- ends with project exams that build the milestones of the projects.
-
-`create_course` returns warnings when the plan misses one of these rules : fix them with `edit_course`, or explain to the student why you keep them. The plan isn't fixed : `edit_course` adds, moves, updates or removes steps as the course goes.
+`create_course` returns warnings when the plan misses one of the rules of a good plan : fix them with `edit_course`, or explain to the student why you keep them. The plan isn't fixed : `edit_course` adds, moves, updates or removes steps as the course goes.
