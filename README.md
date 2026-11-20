@@ -1,10 +1,14 @@
 # teach-me
 
-A Claude Code plugin that turns Claude into a teacher who remembers you : classes, quizzes, project exercises and a report card, kept in your own Obsidian vault.
+A Claude Code plugin with two skills :
+
+- `teach-me` turns Claude into a teacher who remembers you : classes, quizzes, project exercises and a report card, kept in your own Obsidian vault.
+- `teach-them` turns Claude into the teaching partner of a teacher : it prepares a course for a group of students (classes, active learning activities, team project deliverables, exams with detailed corrections, tips for the teacher and practical helpers), written as an Obsidian vault.
 
 | Path                       | Content                                                              |
 | -------------------------- | -------------------------------------------------------------------- |
 | `teach-me/`                | The skill : teaching one student, through the MCP tools              |
+| `teach-them/`              | The skill : preparing a course for a teacher, written in the vault   |
 | `shared/`                  | The references shared by the skills : pedagogy, diagrams, exams      |
 | `teach-me-mcp/`            | The MCP server : the memory of the teacher, stored in the vault      |
 | `.claude-plugin/`          | The plugin manifest and the marketplace that lists it                |
@@ -21,7 +25,7 @@ In Claude Code :
 /plugin install teach-me@gummyy
 ```
 
-Claude Code asks for the folder of your vault when the plugin is enabled (you can change it later in `/config`). Then ask Claude to teach you something.
+Claude Code asks for the folder of your vault when the plugin is enabled (you can change it later in `/config`). Then ask Claude to teach you something, or to prepare a course for your students. `teach-them` writes the notes itself (no MCP tools) : give it the folder of your teaching vault, separate from your `teach-me` vault.
 
 To update after new commits : `/plugin marketplace update gummyy`.
 

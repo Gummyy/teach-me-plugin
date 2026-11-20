@@ -1,15 +1,15 @@
 {
   "name": "teach-me",
   "displayName": "teach-me",
-  "description": "A teacher that remembers you : classes, quizzes, project exercises and a report card, kept in your own Obsidian vault.",
+  "description": "A teacher that remembers you : classes, quizzes, project exercises and a report card, kept in your own Obsidian vault. And a teaching partner that prepares courses for your students.",
   "author": {
     "name": "Gummyy",
     "url": "https://github.com/Gummyy"
   },
   "homepage": "https://github.com/Gummyy/teach-me-plugin",
   "repository": "https://github.com/Gummyy/teach-me-plugin",
-  "keywords": ["education", "learning", "obsidian", "mcp"],
-  "skills": ["./teach-me"],
+  "keywords": ["education", "learning", "teaching", "obsidian", "mcp"],
+  "skills": ["./teach-me", "./teach-them"],
   "mcpServers": {
     "teach-me": {
       "command": "uv",
