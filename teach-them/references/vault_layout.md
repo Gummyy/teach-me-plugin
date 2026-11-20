@@ -1,6 +1,6 @@
 # Vault layout
 
-There are no tools for this vault : you write the notes yourself, following this layout.
+There are no tools for this vault : you write the notes yourself, following this layout, in Obsidian Flavored Markdown. Load the Obsidian and vault conventions skills of the session first (see [Writing in an Obsidian vault](../SKILL.md#writing-in-an-obsidian-vault)).
 
 ## Which vault
 
