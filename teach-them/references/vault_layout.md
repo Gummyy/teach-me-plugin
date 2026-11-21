@@ -14,6 +14,7 @@ skills/skill-<skill>.md
 courses/<course>/course-<course>.md
 courses/<course>/classes/class-<slug>.md
 courses/<course>/activities/activity-<slug>.md
+courses/<course>/autonomy/autonomy-<slug>.md
 courses/<course>/exams/quiz-<slug>.md
 courses/<course>/exams/deliverable-<slug>.md
 courses/<course>/exams/presentation-<slug>.md
@@ -33,33 +34,35 @@ Every note starts with a YAML frontmatter. Quote the wikilinks. Dates use `YYYY-
 
 | Property | Notes | Value |
 | --- | --- | --- |
-| `type` | all | `course`, `project`, `skill`, `class`, `activity`, `quiz`, `deliverable`, `presentation`, `instructions` or `helper` |
+| `type` | all | `course`, `project`, `skill`, `class`, `activity`, `quiz`, `autonomy`, `deliverable`, `presentation`, `instructions` or `helper` |
 | `course` | all but projects and skills | `"[[course-<course>]]"` |
 | `created_at`, `updated_at` | all | dates |
 | `skills` | steps, helpers | list of `"[[skill-<skill>]]"` |
-| `day` | steps | `1` to `5`, the day it happens (or fits best, for a proposed activity) |
+| `day` | steps | `1` to `10`, the day it happens (or fits best, for a proposed activity) |
+| `half_day` | steps | `morning` or `afternoon` |
+| `date` | steps | `YYYY-MM-DD`, once the teacher gave the calendar |
 | `duration` | steps | minutes, e.g. `45` |
 | `importance` | steps | `core` or `optional` |
 | `status` | steps, helpers | `proposed`, `chosen` or `dropped` |
 | `projects` | course, deliverables, presentation | list of `"[[project-<project>]]"` |
-| `group` | course | `students`, `team_size`, `days`, `hours_per_day`, `deliverables`, `presentation` |
+| `group` | course | `students`, `team_size`, `activity_days`, `autonomy_days`, `deliverables`, `presentation`, `dates` (the list of the days, when known) |
 
-A step is a class, an activity, a quiz, a deliverable or a presentation. Classes, exams and helpers are `chosen` from the start; activities stay `proposed` until the teacher picks them.
+A step is a class, an activity, a quiz, an autonomy, a deliverable or a presentation. Classes, autonomy half days, exams and helpers are `chosen` from the start; activities stay `proposed` until the teacher picks them.
 
 ## The course note
 
 `course-<course>.md` is the entry point of the teacher :
 
-1. **Context** : the subject, the group (level, what they know, equipment), the settings of the group.
+1. **Context** : the subject, the group (level, what they know, equipment), the settings of the group and the calendar.
 2. **Projects** : links to the project notes and the deliverables, with their day.
 3. **Skills** : links to the skill notes, grouped by section, as in [designing a course](../../shared/designing_a_course.md#choosing-the-skills-of-a-course).
-4. **Plan** : a table of every step, day by day.
+4. **Plan** : a table of every step, half day by half day.
 
-   | Day | Step | Type | Duration | Description | Skills | Status |
-   | --- | --- | --- | --- | --- | --- | --- |
-   | 1 | [[class-...\|Title]] | 📖 class | 30 | ... | [[skill-...\|...]] | chosen |
+   | Day | Half day | Step | Type | Duration | Description | Skills | Status |
+   | --- | --- | --- | --- | --- | --- | --- | --- |
+   | 1 | morning | [[class-...\|Title]] | 📖 class | 30 | ... | [[skill-...\|...]] | chosen |
 
-   Escape the `|` of an alias inside a table with `\|`. Icons : 📖 class, 🤸 activity, ❓ quiz, 📦 deliverable, 🎤 presentation.
+   Escape the `|` of an alias inside a table with `\|`. Icons : 📖 class, 🤸 activity, ❓ quiz, 🧭 autonomy, 📦 deliverable, 🎤 presentation. Write the date in the Day column once it is known.
 5. **Extra activities** : the `proposed` activities, to pick from.
 6. **Instructions and helpers** : links to them.
 
