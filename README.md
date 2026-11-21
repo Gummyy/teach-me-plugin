@@ -37,7 +37,7 @@ Load the plugin from your clone instead of installing it, so that your changes a
 claude --plugin-dir /path/to/teach-me-plugin
 ```
 
-Check the manifests with `claude plugin validate /path/to/teach-me-plugin`. The server has its own [README](teach-me-mcp/README.md) (tests, MCP Inspector).
+Check the manifests with `claude plugin validate /path/to/teach-me-plugin`. The plugin's [hooks](hooks/hooks.json) serve `teach-them` : after a turn that edited a `teach-them` vault, they rebuild its plan and check it with `teach-vault` (they exit at once for any other file). The server has its own [README](teach-me-mcp/README.md) (tests, MCP Inspector).
 
 ## Use it in cloud sessions and on your phone
 

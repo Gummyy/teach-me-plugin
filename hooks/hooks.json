@@ -1,0 +1,28 @@
+{
+  "description": "teach-them : after a turn that edited a teach-them vault, rebuild the plan of its course notes and check it",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "UV_PROJECT_ENVIRONMENT=\"${CLAUDE_PLUGIN_DATA}/venv\" uv run --quiet --project \"${CLAUDE_PLUGIN_ROOT}/teach-me-mcp\" teach-vault hook record",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "UV_PROJECT_ENVIRONMENT=\"${CLAUDE_PLUGIN_DATA}/venv\" uv run --quiet --project \"${CLAUDE_PLUGIN_ROOT}/teach-me-mcp\" teach-vault hook stop",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

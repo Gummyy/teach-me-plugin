@@ -87,11 +87,11 @@ Most notes are for the students too, with the parts for the teacher in teacher b
 
 # Before saying it's done
 
-- [ ] Every skill is evaluated at least once, the most important ones several times.
+- [ ] The most important skills are evaluated several times.
 - [ ] There is an exercise (activity, quiz or deliverable) at least every 3 classes.
 - [ ] The 10 days are complete and realistic : students are mostly active in the activity half days, and every autonomy half day has a clear goal and its helpers.
-- [ ] Every day but the first and the last opens with a recall of the previous one.
 - [ ] There are at least 2 deliverables (preferably 3), each due after enough autonomy time, and a final presentation with a demonstration when possible.
-- [ ] Every quiz, deliverable and presentation has its instructions, expected outcome, correction and tips.
+- [ ] The expected outcome and the correction of every exam are detailed enough to grade with, or postponed with a `> [!todo]`.
 - [ ] There are extra activities to pick from, beyond what the activity half days hold.
-- [ ] Every link points to a note that exists.
+
+What runs automatically : at the end of each turn that edited the vault, the plugin rebuilds the generated tables of the course note and runs `teach-vault check` (links resolve, every skill is evaluated, every day but the first and the last opens with a recall, every exam has its 4 sections, no student note links to a teacher note); when something fails, you get the failures to fix before handing back.

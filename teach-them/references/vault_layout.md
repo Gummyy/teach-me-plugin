@@ -96,7 +96,6 @@ uv run --quiet --project "${CLAUDE_PLUGIN_ROOT}/teach-me-mcp" teach-vault check 
 uv run --quiet --project "${CLAUDE_PLUGIN_ROOT}/teach-me-mcp" teach-vault export <vault> <destination> # the student version, then its links checked
 ```
 
-- **Continuing a course** : run `plan` before reading the course note, since the teacher may have changed the notes in Obsidian.
+- **At the end of each turn** : the plugin's hooks run `plan` then `check` on a vault you edited, so you don't run them yourself.
+- **Continuing a course** : run `plan` before reading the course note, since the hooks don't see the teacher's own edits in Obsidian.
 - **The student version** : run `export` when the teacher asks for it, into a folder the teacher names, never inside the teacher's vault.
-
-Keep the course note in sync : when a step is added, moved, chosen or dropped, update its row.

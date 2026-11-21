@@ -4,6 +4,7 @@
     teach-vault check <vault>                what fails in the vault, exit 1 if anything does
     teach-vault export <vault> <destination> [--force]
                                              the student vault, then the link checks on it
+    teach-vault hook record|stop             the plugin's hooks, reading the hook event on stdin
 """
 
 from __future__ import annotations
@@ -81,10 +82,16 @@ def main(argv: list[str] | None = None) -> int:
     export_parser.add_argument("vault", type=Path)
     export_parser.add_argument("destination", type=Path)
     export_parser.add_argument("--force", action="store_true", help="replace the destination if it exists")
+    hook_parser = commands.add_parser("hook", help="the plugin's hooks (PostToolUse, Stop), reading the hook event on stdin")
+    hook_parser.add_argument("event", choices=("record", "stop"))
     args = parser.parse_args(argv)
 
     if args.command == "plan":
         return run_plan(args.vault, args.check)
+    if args.command == "hook":
+        from teach_me.vault import hooks
+
+        return hooks.record() if args.event == "record" else hooks.stop()
     if args.command == "check":
         return run_check(args.vault)
     return run_export(args.vault, args.destination, args.force)
