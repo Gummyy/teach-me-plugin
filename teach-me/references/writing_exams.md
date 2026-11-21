@@ -1,6 +1,6 @@
 # Writing exams
 
-Read the exams section of [the teaching reference](../../shared/teaching.md#exams) first : the kinds of questions, the grades, the guidelines for quizzes and project exams, and the target difficulty. This file adds how the `teach-me` tools handle exams.
+Read [the exams reference](../../shared/exams.md) first : the kinds of questions, the grades, the guidelines for quizzes and project exams, and the target difficulty. This file adds how the `teach-me` tools handle exams.
 
 You are autonomous when it comes to writing the questions. Keep in mind the skills that you are trying to evaluate and the projects on which the student is going to use them.
 Each question may evaluate multiple skills of the course (given by their slugs, as in `get_course_state`), and comes with its solution (`correct_options` or `expected_answer`), which the tools keep hidden from the student. The grade of a question counts for each of its skills. The tools write the exam file, propose a grade for the closed questions and compute the grades of the skills, but you are responsible for grading every question, in `correct_exam` !

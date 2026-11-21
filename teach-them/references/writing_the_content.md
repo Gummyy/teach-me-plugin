@@ -17,7 +17,7 @@ The subject the teams build all along the course, sized for a team of ~4 over th
 What the teacher presents, ~20-45 minutes, always followed by something the students do.
 
 - **Goal** : the skills it teaches, in one sentence.
-- **Content** : the concepts, in the order the teacher presents them, with diagrams and examples. Explore widely first, describe thoroughly later (see the teaching reference).
+- **Content** : the concepts, in the order the teacher presents them, with diagrams and examples. Explore widely first, describe thoroughly later (see [the teaching reference](../../shared/teaching.md#pedagogical-progression)).
 - **Questions to ask the room** : 2-4 questions that keep the students thinking, with the answers you expect.
 - **Surprise** : one example from another field, a fun fact or an unexpected application.
 - **Next** : the activity, quiz or project work that follows.
@@ -39,16 +39,16 @@ Each one is ready to hand out and ready to correct, in 4 sections :
 
 1. **Instructions for the students** : what you'd hand out, ready to copy as is. The context, the questions or the expected work, the format of the answer, the duration (or the deadline), how it is graded.
 2. **Expected outcome** : very detailed. For a quiz, the solution of every question. For a deliverable or a presentation, what a great result contains, piece by piece, with an example when it helps (a sample answer, an excerpt of code, a diagram).
-3. **Correction** : very detailed. For every question or criterion, its skills, what earns an A, a B, a C or a D (the grades of the teaching reference), and the mistakes you expect, each with the explanation to give the student. For a deliverable or a presentation, end with a grading grid the teacher can fill in for each team.
+3. **Correction** : very detailed. For every question or criterion, its skills, what earns an A, a B, a C or a D (the grades of [the exams reference](../../shared/exams.md#questions-and-grades)), and the mistakes you expect, each with the explanation to give the student. For a deliverable or a presentation, end with a grading grid the teacher can fill in for each team.
 4. **Tips to guide the students** : hints from the lightest to the strongest, so the teacher can unlock a team without giving the answer (copy / paste kills learning), and the questions to ask a team that is stuck.
 
 ### Quizzes
 
-Follow the quiz guidelines of the teaching reference. Add, for every option of a closed question, why it is right or wrong : the teacher will be asked.
+Follow [the quiz guidelines](../../shared/exams.md#quizzes). Add, for every option of a closed question, why it is right or wrong : the teacher will be asked.
 
 ### Deliverables
 
-A deliverable is a milestone of the project, for a team, sized for the time the plan gives it (often half a day to a day). Follow the project exam guidelines of the teaching reference. Vary the formats from one deliverable to the next (code, diagram, report, video, poster, ...). Say how each student's contribution shows, so that every student of the team is evaluated.
+A deliverable is a milestone of the project, for a team, sized for the time the plan gives it (often half a day to a day). Follow [the project exam guidelines](../../shared/exams.md#project-exams). Vary the formats from one deliverable to the next (code, diagram, report, video, poster, ...). Say how each student's contribution shows, so that every student of the team is evaluated.
 
 ### Presentation
 

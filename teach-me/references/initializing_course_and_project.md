@@ -50,7 +50,7 @@ In order to initialize a course, you must ask questions to your student until yo
 - what does the student already know ?
 - what is the student's project ? If they have no precise project, propose some examples until they pick one. It is always better if the student likes their project as it is going to be their main source of motivation ! Refer to the [initializing a project](#initializing-a-project) reference !
 
-Then choose **all** the skills that the student will validate during this course, following [the teaching reference](../../shared/teaching.md#choosing-the-skills-of-a-course), and check the list with the student. The student may not be able to validate the skills because they don't know many of the concepts you are about to teach them, but they must confirm that they believe you have successfully targeted what they want to learn. If many skills essential to their project don't belong to the course, tell them, as they may not realize it : the outcome is a new definition of the course or the project, or a new and more suitable course or project.
+Then choose **all** the skills that the student will validate during this course, following [designing a course](../../shared/designing_a_course.md#choosing-the-skills-of-a-course), and check the list with the student. The student may not be able to validate the skills because they don't know many of the concepts you are about to teach them, but they must confirm that they believe you have successfully targeted what they want to learn.
 
 Once you have gathered all these info :
 1. call `list_skills` : the student may already have some of these skills from another course. Reuse them, so that their marks follow the student from one course to the next.
@@ -60,6 +60,6 @@ Once you have gathered all these info :
 
 ### Planning the course
 
-Plan the course following [the teaching reference](../../shared/teaching.md#planning-a-course). Each step has a kind : `class`, `quiz` or `project`. Present the plan to the student and validate it with them before calling `create_course`.
+Plan the course following [designing a course](../../shared/designing_a_course.md#planning-a-course). Each step has a kind : `class`, `quiz` or `project`. Present the plan to the student and validate it with them before calling `create_course`.
 
 `create_course` returns warnings when the plan misses one of the rules of a good plan : fix them with `edit_course`, or explain to the student why you keep them. The plan isn't fixed : `edit_course` adds, moves, updates or removes steps as the course goes.

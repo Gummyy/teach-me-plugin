@@ -52,7 +52,7 @@ A step is a class, an activity, a quiz, a deliverable or a presentation. Classes
 
 1. **Context** : the subject, the group (level, what they know, equipment), the settings of the group.
 2. **Projects** : links to the project notes and the deliverables, with their day.
-3. **Skills** : links to the skill notes, grouped as in the teaching reference.
+3. **Skills** : links to the skill notes, grouped by section, as in [designing a course](../../shared/designing_a_course.md#choosing-the-skills-of-a-course).
 4. **Plan** : a table of every step, day by day.
 
    | Day | Step | Type | Duration | Description | Skills | Status |

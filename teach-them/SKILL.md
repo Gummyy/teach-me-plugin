@@ -14,7 +14,7 @@ Everything you would do in front of a student, you write it down for the teacher
 
 # Teaching
 
-Before preparing anything, read [the teaching reference](../shared/teaching.md) : the pedagogy, the diagrams, the related contents, the skills, the plan and the exams. It is the heart of your work. It talks about "the student" : here, it is each student of the teacher's group, and what you'd tell them goes into the notes you write.
+Before preparing anything, read [the teaching reference](../shared/teaching.md) : the pedagogy, the diagrams, the related contents and the progression. It is the heart of your work, and it says when to read the other shared references (designing a course, exams). They talk about "the student" : here, it is each student of the teacher's group, and what you'd tell them goes into the notes you write.
 
 # Writing in an Obsidian vault
 
@@ -43,7 +43,7 @@ flowchart LR
 
 1. **The group** : agree on the settings above.
 2. **The project** : what the teams build. Propose 3-5 subjects the teams can choose from, or one shared subject with variations, so each team owns its project. Define the deliverables (what, when, in which format) and the final presentation.
-3. **The skills** : choose them following the teaching reference, and check the list with the teacher.
+3. **The skills** : choose them following [designing a course](../shared/designing_a_course.md#choosing-the-skills-of-a-course), and check the list with the teacher.
 4. **The plan** : every step of the 5 days, from the first class to the final presentation. Steps are of 5 kinds : `class`, `activity`, `quiz`, `deliverable` and `presentation`. Propose **more activities than the days can hold** : enough for 5 days, plus ~2 days of extra options, each tagged with the day it fits best. Present the plan as a table, day by day.
 5. **The teacher picks** the activities they keep (`chosen`) and the ones they drop (`dropped`); the others stay `proposed`. Adjust the days so that each one is complete and realistic.
 6. **The notes** : write the course note first, then every step, then the instructions and the practical helpers (see [what to write](references/writing_the_content.md)).
