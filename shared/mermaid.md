@@ -2,6 +2,8 @@
 
 ## Choosing the right tool to render them
 
+This section is for `teach-me`, where you write in a chat. In `teach-them`, the notes are Obsidian files, where mermaid renders.
+
 Pay attention with mermaid diagrams, you have to explicitly chose a tool which allows them to be rendered. If you simply write them in a code block like any other programming language on the interface your student is running on, chances are they won't be able to view the rendered version like you'd assume.
 
 ## Choosing the diagram
