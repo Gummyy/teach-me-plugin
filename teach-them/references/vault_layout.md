@@ -1,10 +1,10 @@
 # Vault layout
 
-There are no tools for this vault : you write the notes yourself, following this layout, in Obsidian Flavored Markdown. Load the Obsidian and vault conventions skills of the session first (see [Writing in an Obsidian vault](../SKILL.md#writing-in-an-obsidian-vault)).
+There are no tools for this vault : you write the notes yourself, following this layout, in Obsidian Flavored Markdown. Load the session's skill about Obsidian Markdown and the skills about the user's own vaults or note conventions first; the others (bases, canvas, ...) only when you write that kind of file (see [Writing in an Obsidian vault](../SKILL.md#writing-in-an-obsidian-vault)).
 
 ## Which vault
 
-Write into the teacher's teaching vault. If the working directory is an Obsidian vault (it has a `.obsidian/` folder) and holds a `courses/` folder written by this skill, or is empty, use it. Otherwise, ask the teacher for the folder once, and remember it in the conversation. Never write into a `teach-me` vault (it has a `users/` folder) : it is the memory of a student, managed by the `teach-me` tools.
+Write into the teacher's teaching vault : the folder the teacher names, or else the working directory or one of its subfolders when it is an Obsidian vault (it has a `.obsidian/` folder, e.g. `course/` inside a git repository) holding a `courses/` folder written by this skill, or is empty. Otherwise, ask the teacher for the folder once, and remember it in the conversation. Every path of this layout is relative to that folder. Never write into a `teach-me` vault (it has a `users/` folder) : it is the memory of a student, managed by the `teach-me` tools.
 
 ## Folders and files
 
