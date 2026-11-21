@@ -143,6 +143,7 @@ def create_exam(
     if not (title or "").strip():
         raise ToolError("The exam needs a non empty `title`.")
     title = title.strip()
+    vault.check_links(intro or "", "intro")
     public, solutions = quiz.validate_questions(questions, objects.course_skills(course_document))
     skills = list(dict.fromkeys(skill for question in public for skill in question["skills"]))
     skill_links = {

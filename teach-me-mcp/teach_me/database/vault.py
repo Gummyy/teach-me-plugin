@@ -147,6 +147,34 @@ def unlink(value: Any) -> str:
 # --------------------------------------------------------------------------- #
 
 
+def check_links(text: str, field_name: str) -> None:
+    """Checks that the wikilinks the model wrote in a markdown field resolve to notes (and headings) of the vault, as Obsidian would.
+
+    Raises:
+        ToolError: listing the broken links, so the model can fix the field and call the tool again
+    """
+    found = [link for link in markdown.links(text or "") if link.note]
+    if not found:
+        return
+    root = vault_path()
+    notes = {path.stem: path for path in root.rglob("*.md") if ".teach-me" not in path.relative_to(root).parts}
+    attachments = {path.name for path in root.rglob("*") if path.is_file() and path.suffix != ".md"}
+    broken = []
+    for link in found:
+        if link.note in attachments:
+            continue
+        if link.note not in notes:
+            broken.append(f"{link.raw} (no note '{link.note}')")
+        elif link.heading and not link.heading.startswith("^") and link.heading.split("#")[-1].strip() not in markdown.headings(notes[link.note].read_text(encoding="utf-8")):
+            broken.append(f"{link.raw} (no heading '{link.heading}' in {link.note})")
+    if broken:
+        raise ToolError(
+            f"`{field_name}` links to notes that don't exist in the vault : {', '.join(broken)}. "
+            "Link an existing note by its file name (e.g. [[class-convolution]]), or write the name as plain text, then call the tool again."
+        )
+
+
+
 @dataclass
 class Document:
     """A markdown file : its frontmatter (metadata) and its content (body)."""

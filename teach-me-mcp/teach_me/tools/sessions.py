@@ -77,6 +77,7 @@ def log_session(course: str, entry: str) -> str:
     """
     if not (entry or "").strip():
         raise ToolError("The `entry` is empty.")
+    vault.check_links(entry, "entry")
     document = objects.get_course(course)
     label = objects.append_to_session(document, entry)
     vault.write(document)
@@ -100,6 +101,7 @@ def save_class(course: str, title: str, summary: str, content: str, planned: Opt
         raise ToolError("The class needs a non empty `title`.")
     if not (content or "").strip():
         raise ToolError("The class `content` is empty : send the class itself, in markdown.")
+    vault.check_links(content, "content")
     course_document = objects.get_course(course)
     warnings = []
     if planned is not None:

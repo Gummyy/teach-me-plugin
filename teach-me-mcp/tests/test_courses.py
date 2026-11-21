@@ -159,3 +159,16 @@ def test_list_projects(course):
     assert pet["description"] == "Classify the pictures of my cats and dogs."
     assert pet["last_progress"][0].endswith("Dataset collected")
     assert list_projects("bob")[0]["name"] == "Robot"
+
+
+def test_save_class_refuses_a_broken_link(course, vault):
+    with pytest.raises(ToolError, match=r"\[\[class-nowhere\]\]"):
+        save_class(course, "Kernels", "", "See [[class-nowhere]] and `[[code]]`.", planned="convolution")
+    path = save_class(course, "Kernels", "", "# Kernels\n\nSee [[skill-convolution|convolution]] and `[[code]]`.", planned="convolution")["path"]
+    second = save_class(course, "Feature maps", "", f"After [[{path.rsplit('/', 1)[-1][:-3]}#Kernels]]...", planned=None)
+    assert second["path"]
+
+
+def test_log_session_refuses_a_broken_heading(course):
+    with pytest.raises(ToolError, match="no heading 'Nope'"):
+        log_session(course, "Reviewed [[skill-convolution#Nope]]")
