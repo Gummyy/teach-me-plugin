@@ -24,18 +24,20 @@ Every note you write is a note of the teacher's Obsidian vault, in Obsidian Flav
 
 Unless the teacher says otherwise, assume :
 
-| Setting | Default |
-| --- | --- |
-| Students | 20 |
-| Teams | of ~4 students, working on their project all along the course |
-| Duration | 10 days spread over 3-5 weeks, i.e. 20 half days of 3 hours (morning and afternoon, with a lunch break in between) |
-| Activity half days | 12 with the teacher : the whole of days 1 and 10, and the mornings of days 2 to 9 (classes, activities, quizzes) |
-| Autonomy half days | 8 : the afternoons of days 2 to 9, of unsupervised team work on the project and its deliverables |
-| Project deliverables | at least 2, preferably 3, each due at the end of an autonomy period |
-| Final presentation | 1, with a demonstration whenever the project allows it, on the morning of the last day |
-| Calendar | days numbered 1 to 10, until the teacher gives the dates |
+| Setting | Default | Property |
+| --- | --- | --- |
+| Students | 20 | `students` |
+| Level of the students | `intermediate` (or `beginner`, `advanced`) : the timings and the depth of the classes derive from it | `students_level` |
+| Teams | of ~4 students, working on their project all along the course | `team_size` |
+| Duration | 10 days spread over 3-5 weeks, i.e. 20 half days (morning and afternoon, with a lunch break in between) | |
+| Half day | 3 hours | `half_day_hours` |
+| Activity half days | 12 with the teacher : the whole of days 1 and 10, and the mornings of days 2 to 9 (classes, activities, quizzes) | `activity_half_days` |
+| Autonomy half days | 8 : the afternoons of days 2 to 9, of unsupervised team work on the project and its deliverables | `autonomy_half_days` |
+| Project deliverables | at least 2, preferably 3, each due at the end of an autonomy period | `deliverables` |
+| Final presentation | 1, with a demonstration whenever the project allows it, on the morning of the last day | |
+| Calendar | days numbered 1 to 10, until the teacher gives the dates | `dates` |
 
-Show this table to the teacher when creating a course and ask them to correct it. Ask, too, about the level of the students, what they already know, the room and equipment, the dates of the course when they are known, and the material the teacher already has (read it when they can share it). Write the result in the course note : every later decision depends on it.
+Show this table to the teacher when creating a course and ask them to correct it. Ask, too, what the students already know, the room and equipment, the dates of the course when they are known, and the material the teacher already has (read it when they can share it). Write the result in the course note, its settings as properties : every later decision depends on it.
 
 ## The rhythm
 
@@ -57,7 +59,7 @@ flowchart LR
 2. **The project** : what the teams build. Propose 3-5 subjects the teams can choose from, or one shared subject with variations, so each team owns its project. Define the deliverables (what, when, in which format) and the final presentation.
 3. **The skills** : choose them following [designing a course](../shared/designing_a_course.md#choosing-the-skills-of-a-course), and check the list with the teacher.
 4. **The plan** : every half day of the 10 days, from the first class to the final presentation, following [the rhythm](#the-rhythm). Steps are of 6 kinds : `class`, `activity`, `quiz`, `autonomy`, `deliverable` and `presentation`. In autonomy, the teams build their project with the skills of the activities, towards the next deliverable. Propose **more activities than the activity half days can hold** : enough for all of them, plus ~4 half days of extra options, each tagged with the half day it fits best. Present the plan as a table, half day by half day and a mermaid flowchart where each half day category has an appropriate shape and selectable options appear connected with dotted lines, while chosen options appear with a solid edge.
-5. **The teacher picks** the activities they keep (`chosen`) and the ones they drop (`dropped`); the others stay `proposed`. Adjust the half days so that each one is complete and realistic.
+5. **The teacher picks** : the activities you put in the plan are `chosen` and the extras `proposed`. The teacher drops what they don't want (`dropped`) and picks extras by setting them to `chosen`; you set `chosen` yourself only on what the teacher validated in the conversation. Adjust the half days so that each one is complete and realistic.
 6. **The notes** : write the course note first, then every step, then the instructions and the practical helpers (see [what to write](references/writing_the_content.md)).
 7. **The review** : check the result against the [checklist](#before-saying-its-done) and tell the teacher, in a few lines, what you wrote and what deserves their attention.
 

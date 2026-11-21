@@ -30,24 +30,30 @@ courses/<course>/helpers/<slug>/...              (the files of a helper : code, 
 
 ## Properties
 
-Every note starts with a YAML frontmatter. Quote the wikilinks. Dates use `YYYY-MM-DDTHH:mm`.
+Every note starts with a YAML frontmatter. Quote the wikilinks. For the dates, use the vault's own date properties and format when it has some (e.g. `creation_time`, `YYYY-MM-DD HH:mm`), otherwise `created_at` and `updated_at`, as `YYYY-MM-DDTHH:mm`. Every property is flat (no nested values) : Obsidian's property panel shows a nested one as raw JSON.
 
 | Property | Notes | Value |
 | --- | --- | --- |
 | `type` | all | `course`, `project`, `skill`, `class`, `activity`, `quiz`, `autonomy`, `deliverable`, `presentation`, `instructions` or `helper` |
 | `course` | all but projects and skills | `"[[course-<course>]]"` |
-| `created_at`, `updated_at` | all | dates |
+| `created_at`, `updated_at` | all | dates (or the vault's own date properties) |
+| `description` | steps, helpers | one sentence, shown in the plan and the extra activities |
+| `section` | skills | the section of the skill, as in the course note, e.g. `"1 · Simple Select queries"` |
 | `skills` | steps, helpers | list of `"[[skill-<skill>]]"` |
-| `day` | steps | `1` to `10`, the day it happens (or fits best, for a proposed activity) |
-| `half_day` | steps | `morning` or `afternoon` |
+| `day` | steps | `1` to `10`, the day it happens (or fits best, for an extra activity) |
+| `half_day` | steps | `morning`, `afternoon`, or `day` for a step that fills the whole day |
+| `order` | steps | `1`, `2`, ... : the position of the step in its half day |
 | `date` | steps | `YYYY-MM-DD`, once the teacher gave the calendar |
 | `duration` | steps | minutes, e.g. `45` |
 | `importance` | steps | `core` or `optional` |
 | `status` | steps, helpers | `proposed`, `chosen` or `dropped` |
 | `projects` | course, deliverables, presentation | list of `"[[project-<project>]]"` |
-| `group` | course | `students`, `team_size`, `activity_days`, `autonomy_days`, `deliverables`, `presentation`, `dates` (the list of the days, when known) |
+| `students`, `team_size`, `students_level` | course | the group : e.g. `20`, `4`, `beginner`, `intermediate` or `advanced` |
+| `half_day_hours`, `activity_half_days`, `autonomy_half_days` | course | the calendar : e.g. `3`, `12`, `8` |
+| `deliverables` | course | the number of deliverables, e.g. `3` |
+| `dates` | course | the list of the days, `YYYY-MM-DD`, once known |
 
-A step is a class, an activity, a quiz, an autonomy, a deliverable or a presentation. Classes, autonomy half days, exams and helpers are `chosen` from the start; activities stay `proposed` until the teacher picks them.
+A step is a class, an activity, a quiz, an autonomy, a deliverable or a presentation. The steps you put in the plan are `chosen`, the extra activities are `proposed`, and helpers are `chosen` from the start. The teacher drops what they don't want (`dropped`) and picks an extra by setting it to `chosen`. You set `chosen` yourself only when the teacher validated it in the conversation.
 
 ## The course note
 
