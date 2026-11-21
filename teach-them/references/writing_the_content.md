@@ -1,6 +1,6 @@
 # What to write
 
-Write for a busy teacher who reads a note 10 minutes before using it : the essentials first, then the details. Every note ends with its **related contents** when there are some : the videos, podcasts, articles or people that will make a student (or the teacher !) curious, with the exact section to look at.
+Write for a busy teacher who reads a note 10 minutes before using it : the essentials first, then the details. Most notes are read by the students too : what they see, and what goes in a teacher block, is in [the vault layout](vault_layout.md#what-the-students-see). Every note ends with its **related contents** when there are some : the videos, podcasts, articles or people that will make a student (or the teacher !) curious, with the exact section to look at.
 
 ## Project
 
@@ -14,24 +14,27 @@ The subject the teams build all along the course, sized for a team of ~4 over th
 
 ## Class
 
-What the teacher presents, ~30-55 minutes, always followed by something the students do.
+What the teacher presents, ~30-55 minutes, always followed by something the students do. The students read it after the class : the goal, the content and the diagrams are for them, the rest goes in teacher blocks.
 
 - **Goal** : the skills it teaches, in one sentence.
 - **Content** : the concepts, in the order the teacher presents them, with diagrams and examples. Explore widely first, describe thoroughly later (see [the teaching reference](../../shared/teaching.md#pedagogical-progression)).
-- **Questions to ask the room** : 2-4 questions that keep the students thinking, with the answers you expect.
-- **Surprise** : one example from another field, a fun fact or an unexpected application.
+- **Questions to ask the room** : 2-4 questions that keep the students thinking, with the answers you expect (in a teacher block).
+- **Surprise** : one example from another field, a fun fact or an unexpected application (in a teacher block, so it stays a surprise).
 - **Next** : the activity, quiz or autonomy work that follows.
 
 ## Activity
 
 An exercise where the students are active : they discuss, build, explain, compare, predict or play. Vary the formats over the days, for instance think-pair-share, jigsaw, peer instruction, predict then run, live code review between teams, role play, debate, gallery walk, unplugged simulation, escape game, kata.
 
+- **Instructions for the students** : what they do, in which groups, how long, and what they hand in. When the students work through it alone (a lab, a kata), every step they need is here.
 - **Goal** : the skills it practises, and why this format fits them.
 - **Format** : solo, pairs, teams or the whole group; duration; room and material.
 - **Run sheet** : the steps with their timing, what the teacher says and does, what the students do.
 - **Debrief** : the questions that turn the activity into learning, and the key points to conclude with.
 - **Variations** : shorter, longer, harder, easier, remote.
 - **What can go wrong** : the usual blockers and how to unlock them.
+
+Everything after the instructions for the students goes in a teacher block.
 
 ## Autonomy
 
@@ -54,6 +57,8 @@ Each one is ready to hand out and ready to correct, in 4 sections :
 3. **Correction** : very detailed. For every question or criterion, its skills, what earns an A, a B, a C or a D (the grades of [the exams reference](../../shared/exams.md#questions-and-grades)), and the mistakes you expect, each with the explanation to give the student. For a deliverable or a presentation, end with a grading grid the teacher can fill in for each team.
 4. **Tips to guide the students** : hints from the lightest to the strongest, so the teacher can unlock a team without giving the answer (copy / paste kills learning), and the questions to ask a team that is stuck.
 
+The 4 sections live in the same note : the instructions for the students first, then the 3 other sections in one teacher block. The teacher may postpone the expected outcome and the correction (e.g. until the teams picked their subject) : write a `> [!todo]` callout under their heading instead of the full text, and list it in the review.
+
 ### Quizzes
 
 Follow [the quiz guidelines](../../shared/exams.md#quizzes). The recall quiz that opens a day takes 5-10 minutes; it is formative (not graded), unless the teacher says otherwise. Add, for every option of a closed question, why it is right or wrong : the teacher will be asked.
@@ -68,7 +73,7 @@ The final presentation of each team : ~20 minutes with a demonstration whenever 
 
 ## Instructions
 
-Tips for the teacher on how to accompany the students : one note per day the teacher spends with them, plus one per topic that deserves it (team dynamics, a hard concept, the use of AI tools, ...).
+Tips for the teacher on how to accompany the students (`audience: teacher`) : one note per day the teacher spends with them, plus one per topic that deserves it (team dynamics, a hard concept, the use of AI tools, ...).
 
 The note of a day is the teacher's entry point, read before the day starts : it lists every step of the day, in order, with a link to each.
 
@@ -79,4 +84,4 @@ The note of a day is the teacher's entry point, read before the day starts : it 
 
 ## Helpers
 
-Anything that saves time to the teacher or the students : a cheat sheet, a glossary, a template of deliverable, a starter project, a dataset, a checklist, a setup guide. Make each one usable on its own. Put its files in `helpers/<slug>/` and describe them in the note : what it is, who uses it, when, and how.
+Anything that saves time to the teacher or the students : a cheat sheet, a glossary, a template of deliverable, a starter project, a dataset, a checklist, a setup guide. Make each one usable on its own, and set its `audience` : `student` for what the students use, `teacher` for what only the teacher uses. Put its files in `helpers/<slug>/` and describe them in the note : what it is, who uses it, when, and how.
