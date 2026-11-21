@@ -28,6 +28,7 @@ The vault path is read from the `TEACH_ME_VAULT` environment variable (a relativ
 | `teach_me/database/vault.py`   | Markdown files, frontmatter, slugs, checked links, time                |
 | `teach_me/database/objects.py` | Where each object lives in the vault, course content, session log, skill grades |
 | `teach_me/database/quiz.py`    | Exam files, answers, the A-E grades                                    |
+| `teach_me/vault/`              | The `teach-vault` command of the `teach-them` skill, and the frontmatter and wikilink parsing shared with the tools |
 | `tests/`                       | pytest suite, each test runs in a temporary vault                      |
 | `server.py`                    | Runs the server without installing it : `python server.py`             |
 
@@ -46,6 +47,18 @@ Or with a venv :
 python -m pip install -r requirements.txt
 python -m pytest
 ```
+
+## The `teach-vault` command
+
+The vault scripts of the `teach-them` skill, whose vault the model writes itself (no tools) :
+
+```bash
+uv run teach-vault plan <vault> [--check]               # rebuild the plan, extra activities and skills coverage tables of the course notes
+uv run teach-vault check <vault>                        # links, skills evaluated, daily recalls, exam sections, teacher links
+uv run teach-vault export <vault> <destination> [--force]  # the student vault, then its link checks
+```
+
+The plugin's hooks run `plan` and `check` at the end of each turn that edited a `teach-them` vault (see [hooks/hooks.json](../hooks/hooks.json)).
 
 ## Try the tools by hand
 

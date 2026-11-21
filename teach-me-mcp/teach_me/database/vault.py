@@ -20,6 +20,7 @@ from typing import Any, Callable, Iterator, Optional
 import yaml
 
 from teach_me.errors import ToolError
+from teach_me.vault import markdown
 
 VAULT_ENV = "TEACH_ME_VAULT"
 TIME_FORMAT = "%Y-%m-%dT%H:%M"
@@ -32,7 +33,8 @@ LOCK_TIMEOUT = 10.0
 STALE_LOCK = 60.0
 """A lock older than this many seconds was left by a server that crashed : it is removed."""
 
-_FRONTMATTER = re.compile(r"\A---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)(.*)\Z", re.DOTALL)
+_FRONTMATTER = markdown.FRONTMATTER
+"""Shared with the `teach-vault` command : the frontmatter is parsed the same way by both skills."""
 
 
 # --------------------------------------------------------------------------- #
@@ -169,18 +171,15 @@ class ConflictError(ToolError):
 
 
 def _parse_frontmatter(path: Path, text: str) -> tuple[dict, str]:
-    match = _FRONTMATTER.match(text)
-    if not match:
-        return {}, text.strip("\n")
     try:
-        metadata = yaml.safe_load(match.group(1)) or {}
+        metadata, body = markdown.parse_frontmatter(text)
     except yaml.YAMLError as error:
         raise ToolError(
             f"The frontmatter of '{relative(path)}' is not valid YAML, probably after a manual edit : {error}\n"
             f"Fix it with repair_note(path=\"{relative(path)}\", frontmatter=...), keeping every key and value. "
-            f"Its current frontmatter :\n{match.group(1)}"
+            f"Its current frontmatter :\n{markdown.split_frontmatter(text)[0]}"
         ) from error
-    return (metadata if isinstance(metadata, dict) else {}), match.group(2).strip("\n")
+    return metadata, body.strip("\n")
 
 
 def read(path: Path) -> Document:
