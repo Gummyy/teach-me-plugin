@@ -4,7 +4,7 @@ Write for a busy teacher who reads a note 10 minutes before using it : the essen
 
 ## Project
 
-The subject the teams build all along the course, sized for a team of ~4 over the 10 days, half of them in autonomy.
+The subject the teams build all along the course, sized for a team of ~4 over the 10 days, working on it alone in the autonomy half days.
 
 - **The pitch** : 3-5 sentences that make the students want to build it.
 - **The features** : the minimum the team must deliver, then the bonus features for fast teams.
@@ -14,7 +14,7 @@ The subject the teams build all along the course, sized for a team of ~4 over th
 
 ## Class
 
-What the teacher presents, ~20-45 minutes, always followed by something the students do.
+What the teacher presents, ~30-55 minutes, always followed by something the students do.
 
 - **Goal** : the skills it teaches, in one sentence.
 - **Content** : the concepts, in the order the teacher presents them, with diagrams and examples. Explore widely first, describe thoroughly later (see [the teaching reference](../../shared/teaching.md#pedagogical-progression)).
@@ -43,6 +43,8 @@ A half day where the teams build their project alone : the teacher isn't there, 
 - **Stuck ?** : what to try before waiting for the teacher (re-read a class, ask another team, a debugging checklist), and how to note a question for the next activity half day.
 - **Team log** : 3-5 lines to write at the end : what was done, what blocks, who did what. The teacher reads them at the next activity half day.
 
+The first autonomy half day comes before the teams have set anything up : its goal includes the setup (accounts, tools, repository, team charter), and the next activity half day opens with a setup corner for the teams still blocked.
+
 ## Quiz, deliverable and presentation
 
 Each one is ready to hand out and ready to correct, in 4 sections :
@@ -54,19 +56,21 @@ Each one is ready to hand out and ready to correct, in 4 sections :
 
 ### Quizzes
 
-Follow [the quiz guidelines](../../shared/exams.md#quizzes). Add, for every option of a closed question, why it is right or wrong : the teacher will be asked.
+Follow [the quiz guidelines](../../shared/exams.md#quizzes). The recall quiz that opens a day takes 5-10 minutes; it is formative (not graded), unless the teacher says otherwise. Add, for every option of a closed question, why it is right or wrong : the teacher will be asked.
 
 ### Deliverables
 
-A deliverable is a milestone of the project, for a team, sized for the autonomy time before its deadline (usually 2-3 half days), and due at the start of an activity half day so the teacher can give feedback. Follow [the project exam guidelines](../../shared/exams.md#project-exams). Vary the formats from one deliverable to the next (code, diagram, report, video, poster, ...). Say how each student's contribution shows, so that every student of the team is evaluated.
+A deliverable is a milestone of the project, for a team, sized for the autonomy time before its deadline (usually 2-3 half days), and due at the start of an activity half day so the teacher can give feedback. The feedback to each team (~10-15 minutes) runs during that activity half day, one team at a time, while the other teams work on their own : plan an activity in teams, long enough for every team to get its turn. Follow [the project exam guidelines](../../shared/exams.md#project-exams). Vary the formats from one deliverable to the next (code, diagram, report, video, poster, ...). Say how each student's contribution shows, so that every student of the team is evaluated.
 
 ### Presentation
 
-The final presentation of each team : a demonstration whenever the project allows it, and questions from the room. Give the teacher the schedule of the session for all the teams, the questions to ask, and a grading grid covering the content, the demo and the presentation itself. Plan a backup when the demo can't run (a recorded video, screenshots).
+The final presentation of each team : ~20 minutes with a demonstration whenever the project allows it, then 15 minutes of questions from the room. With 5 teams, it takes the morning of the last day. Give the teacher the schedule of the session for all the teams, the questions to ask, and a grading grid covering the content, the demo and the presentation itself. Plan a backup when the demo can't run (a recorded video, screenshots).
 
 ## Instructions
 
 Tips for the teacher on how to accompany the students : one note per day the teacher spends with them, plus one per topic that deserves it (team dynamics, a hard concept, the use of AI tools, ...).
+
+The note of a day is the teacher's entry point, read before the day starts : it lists every step of the day, in order, with a link to each.
 
 - **The day at a glance** : its steps and timing, the material to prepare beforehand, and the team logs and deliverables to read before the day starts.
 - **What to watch** : the signs that a student or a team is lost, disengaged or overwhelmed, and what to do.

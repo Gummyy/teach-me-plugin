@@ -29,22 +29,22 @@ Unless the teacher says otherwise, assume :
 | Students | 20 |
 | Teams | of ~4 students, working on their project all along the course |
 | Duration | 10 days spread over 3-5 weeks, i.e. 20 half days of 3 hours (morning and afternoon, with a lunch break in between) |
-| Activities | 5 days (10 half days) with the teacher : classes, activities, quizzes |
-| Autonomy | 5 days (10 half days) of unsupervised team work on the project and its deliverables |
+| Activity half days | 12 with the teacher : the whole of days 1 and 10, and the mornings of days 2 to 9 (classes, activities, quizzes) |
+| Autonomy half days | 8 : the afternoons of days 2 to 9, of unsupervised team work on the project and its deliverables |
 | Project deliverables | at least 2, preferably 3, each due at the end of an autonomy period |
-| Final presentation | 1, with a demonstration whenever the project allows it, on the last day |
+| Final presentation | 1, with a demonstration whenever the project allows it, on the morning of the last day |
 | Calendar | days numbered 1 to 10, until the teacher gives the dates |
 
 Show this table to the teacher when creating a course and ask them to correct it. Ask, too, about the level of the students, what they already know, the room and equipment, the dates of the course when they are known, and the material the teacher already has (read it when they can share it). Write the result in the course note : every later decision depends on it.
 
 ## The rhythm
 
-- **Learn in the morning, build in the afternoon** : by default, an activity half day in the morning and an autonomy half day in the afternoon, so the teams use the same day what they just discovered, except the first and last days where the teacher is there for the whole day. This is more of an informative step, not an absolute rule : when a step needs to work around it, do so but explain why.
-- **The days are far apart** : with 2-3 days of the course per week, students forget in between. Open every day (except the first and last) with a short recall of the previous one (a 5-10 minute quiz is ideal), and close every activity half day with what the teams must do in autonomy.
-- **Autonomy is unsupervised** : the teacher isn't in the room. Each autonomy half day needs a clear goal (deliverables, final presentation, working on an activity, ...) and the helpers to get unstuck alone..
-- **3 hours is long** : plan a break in every half day, and change format at least once.
-- **The calendar** : once the teacher gives the dates, map the days onto them. Thursday afternoon is free for the students' social events, so a Thursday only has a morning that, unless explicitly specified otherwise, is an autonomy session.
-- **The final presentations** : ~20 minutes per team + 15 minutes of questions / answers. It entirely fills the last day of the course
+- **Learn in the morning, build in the afternoon** : an activity half day in the morning and an autonomy half day in the afternoon, so the teams use the same day what they just discovered. Days 1 and 10 are activity half days all day. Move away from it when a step needs it (a long activity, a full day of work between groups), and say why in the course note.
+- **The days are far apart** : with 2-3 days of the course per week, students forget in between. Open every day but the first and the last with a short recall quiz of the previous one, and close every activity half day with what the teams must do in autonomy.
+- **Autonomy is unsupervised** : the teacher isn't in the room. Each autonomy half day needs a clear goal (deliverables, final presentation, working on an activity, ...) and the helpers to get unstuck alone.
+- **A half day is long** : plan a break in every half day, and change format at least once.
+- **The calendar** : once the teacher gives the dates, map the days onto them. Thursday afternoon is free for the students' social events, so a Thursday only has a morning, of autonomy. When a day with the teacher (day 1, day 10, or a day with an important class) falls on a Thursday, its class moves to the next day of the course, and you say so in the course note (for day 10, ask the teacher for another date).
+- **The last day** : the final presentations take the morning; the afternoon is a closing activity with the teacher (course feedback, self-assessment on the skills, peer assessment).
 
 # Preparing a course
 
@@ -56,7 +56,7 @@ flowchart LR
 1. **The Course context** : agree on the settings above, and read [designing a course](../shared/designing_a_course.md) for the next steps.
 2. **The project** : what the teams build. Propose 3-5 subjects the teams can choose from, or one shared subject with variations, so each team owns its project. Define the deliverables (what, when, in which format) and the final presentation.
 3. **The skills** : choose them following [designing a course](../shared/designing_a_course.md#choosing-the-skills-of-a-course), and check the list with the teacher.
-4. **The plan** : every half day of the 10 days, from the first class to the final presentation, following [the rhythm](#the-rhythm). Steps are of 6 kinds : `class`, `activity`, `quiz`, `autonomy`, `deliverable` and `presentation`. In autonomy, the teams build their project with the skills of the activities, towards the next deliverable. Propose **more activities than the activity half days can hold** : enough for the 10 of them, plus ~4 half days of extra options, each tagged with the half day it fits best. Present the plan as a table, half day by half day and a mermaid flowchart where each half day category has an appropriate shape and selectable options appear connected with dotted lines, while chosen options appear with a solid edge.
+4. **The plan** : every half day of the 10 days, from the first class to the final presentation, following [the rhythm](#the-rhythm). Steps are of 6 kinds : `class`, `activity`, `quiz`, `autonomy`, `deliverable` and `presentation`. In autonomy, the teams build their project with the skills of the activities, towards the next deliverable. Propose **more activities than the activity half days can hold** : enough for all of them, plus ~4 half days of extra options, each tagged with the half day it fits best. Present the plan as a table, half day by half day and a mermaid flowchart where each half day category has an appropriate shape and selectable options appear connected with dotted lines, while chosen options appear with a solid edge.
 5. **The teacher picks** the activities they keep (`chosen`) and the ones they drop (`dropped`); the others stay `proposed`. Adjust the half days so that each one is complete and realistic.
 6. **The notes** : write the course note first, then every step, then the instructions and the practical helpers (see [what to write](references/writing_the_content.md)).
 7. **The review** : check the result against the [checklist](#before-saying-its-done) and tell the teacher, in a few lines, what you wrote and what deserves their attention.
@@ -64,7 +64,7 @@ flowchart LR
 The teacher may stop at any step and come back later : before going further, read the course note and the notes it links to, and continue from there.
 
 > [!Important] Active learning first
-> Students learn by doing, discussing and explaining, not by listening. Keep classes short (~30-55 minutes) and always followed by something the students do. In every activity half day, the students should spend more time active than listening.
+> Students learn by doing, discussing and explaining, not by listening. Keep classes short and always followed by something the students do. In every activity half day, the students should spend more time active than listening.
 
 # What you write
 
@@ -88,8 +88,8 @@ Where each note goes and what its properties are is described in [the vault layo
 - [ ] Every skill is evaluated at least once, the most important ones several times.
 - [ ] There is an exercise (activity, quiz or deliverable) at least every 3 classes.
 - [ ] The 10 days are complete and realistic : students are mostly active in the activity half days, and every autonomy half day has a clear goal and its helpers.
-- [ ] Every day after the first opens with a recall of the previous one.
+- [ ] Every day but the first and the last opens with a recall of the previous one.
 - [ ] There are at least 2 deliverables (preferably 3), each due after enough autonomy time, and a final presentation with a demonstration when possible.
 - [ ] Every quiz, deliverable and presentation has its instructions, expected outcome, correction and tips.
-- [ ] There are extra activities to pick from, beyond what the 10 activity half days hold.
+- [ ] There are extra activities to pick from, beyond what the activity half days hold.
 - [ ] Every link points to a note that exists.
