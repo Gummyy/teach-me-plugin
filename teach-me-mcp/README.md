@@ -37,9 +37,10 @@ The vault path is read from the `TEACH_ME_VAULT` environment variable (a relativ
 | `teach_me/database/objects.py` | Where each object lives in the vault, course content, session log, skill grades |
 | `teach_me/database/blocks.py`  | The parts of a note the tools generate, and the student's "My notes" section where their edits of a generated part move |
 | `teach_me/database/plan.py`    | The plan of a course : the notes of its steps                          |
-| `teach_me/database/dashboards.py` | The Obsidian bases of the vault, and the views at the top of the course notes |
+| `teach_me/database/dashboards.py` | The Obsidian bases of the vault, and the views at the top of the course notes. `tests/test_dashboards.py` checks their structure, but only Obsidian tells whether a view renders : see below |
 | `teach_me/database/quiz.py`    | Exam files, answers, the A-E grades                                    |
 | `teach_me/database/migrations.py` | The version of the vault and the migrations to the current format. `main()` is the `teach-me-migrate` command |
+| `teach_me/database/migration_<n>.py` | What migration `n` changes in the notes of a vault at version `n - 1` |
 | `teach_me/vault/`              | The `teach-vault` command of the `teach-them` skill, and the frontmatter and wikilink parsing shared with the tools |
 | `tests/`                       | pytest suite, each test runs in a temporary vault                      |
 | `server.py`                    | Runs the server without installing it : `python server.py`             |
@@ -62,11 +63,21 @@ python -m pytest
 
 ## Migrations
 
-When a new version changes the format of the notes, it adds a function to `MIGRATIONS` in `teach_me/database/migrations.py`. The version of a vault is in `.teach-me/version` : the tools refuse an older vault and ask the model to call `migrate_vault`, which backs up the notes into `.teach-me/backups/<date>/` and runs the missing migrations. You can also run them yourself :
+When a new version changes the format of the notes, it adds a function to `MIGRATIONS` in `teach_me/database/migrations.py`. The version of a vault is in `.teach-me/version` : the tools refuse an older vault and ask the model to call `migrate_vault`, which backs up the notes, the bases and `Home.md` into `.teach-me/backups/<date>/` and runs the missing migrations. Migration `n` lives in `teach_me/database/migration_<n>.py`. You can also run them yourself :
 
 ```bash
 uv run teach-me-migrate /path/to/the/vault
 ```
+
+## Check the views in Obsidian
+
+A base can be valid YAML and still not render. With Obsidian running and a migrated vault open, `scripts/query_base.sh` prints what each view returns, or the error Obsidian shows :
+
+```bash
+scripts/query_base.sh <vault name> <vault folder> bases/course.base courses/<course>/course-<course>.md
+```
+
+`this` is bound to the note given, as when the view is embedded in it. The display names and the summaries only show in the rendered note.
 
 ## The `teach-vault` command
 

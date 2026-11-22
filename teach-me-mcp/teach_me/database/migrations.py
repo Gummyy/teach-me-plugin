@@ -7,7 +7,7 @@ up to date : reading notes of an older format would give wrong answers.
 
 `MIGRATIONS[n]` brings a vault from version n to version n + 1. A migration only uses the functions of
 the database modules, and returns one line per note it changed. Before running them, the notes are
-copied into `.teach-me/backups/<date>/`, so that nothing is ever lost.
+copied into `.teach-me/backups/<date>/` with the bases and Home.md, so that nothing is ever lost.
 """
 
 from __future__ import annotations
@@ -19,10 +19,10 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
-from teach_me.database import migration_1, vault
+from teach_me.database import migration_1, migration_2, vault
 from teach_me.errors import ToolError
 
-MIGRATIONS: list[Callable[[], list[str]]] = [migration_1.run]
+MIGRATIONS: list[Callable[[], list[str]]] = [migration_1.run, migration_2.run]
 """MIGRATIONS[n] brings a vault from version n to version n + 1, and returns what it changed."""
 DATA_FOLDERS = ("users", "projects", "skills", "courses")
 """The folders of the notes written by the tools : a vault holding one of them was written by teach-me."""
@@ -84,13 +84,18 @@ def requires_current(function: Callable) -> Callable:
 
 
 def _backup() -> Path:
-    """Copies the notes and the hidden data of the vault into .teach-me/backups/<date>/."""
+    """Copies the notes, the views and the hidden data of the vault into .teach-me/backups/<date>/."""
     root = vault.vault_path()
     target = root / ".teach-me" / "backups" / vault.now().strftime("%Y-%m-%d-%H%M")
     target = Path(vault.unique_slug(str(target), lambda candidate: Path(candidate).exists()))
     for folder in DATA_FOLDERS:
         if (root / folder).is_dir():
             shutil.copytree(root / folder, target / folder, ignore=shutil.ignore_patterns("*.tmp"))
+    if (root / "bases").is_dir():
+        shutil.copytree(root / "bases", target / "bases")
+    if (root / "Home.md").is_file():
+        target.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / "Home.md", target / "Home.md")
     for folder in ("solutions", "grades", "exams"):
         if (root / ".teach-me" / folder).is_dir():
             shutil.copytree(root / ".teach-me" / folder, target / ".teach-me" / folder)

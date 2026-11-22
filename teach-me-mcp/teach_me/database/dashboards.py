@@ -21,7 +21,7 @@ from teach_me.database.vault import Document
 COURSE_BLOCK = "dashboard"
 STEP_TYPES = ("class", "quiz", "exercise")
 
-_STEPS_FILTER = "\n".join(f"        - 'type == \"{kind}\"'" for kind in STEP_TYPES)
+_STEPS_FILTER = "\n".join(f"            - 'type == \"{kind}\"'" for kind in STEP_TYPES)
 
 _IN_COURSE = "        - 'file.inFolder(this.file.folder)'"
 
@@ -35,6 +35,8 @@ formulas:
   where: 'if(url, url, file)'
   kind: 'if(type == "class", "📖 class", if(type == "quiz", "❓ quiz", "🛠️ project"))'
   progress: 'if(status == "done" || status == "corrected", "✅ done", if(status == "planned", "⏳ planned", "✍️ " + status))'
+summaries:
+  Evaluated mean: 'values.filter(value).mean().round(2)'
 properties:
   note.order:
     displayName: "#"
@@ -44,6 +46,16 @@ properties:
     displayName: Skill
   formula.kind:
     displayName: Type
+  formula.resource:
+    displayName: Resource
+  formula.where:
+    displayName: Link
+  formula.project:
+    displayName: Project
+  note.step:
+    displayName: Shared in
+  note.status:
+    displayName: Status
   note.description:
     displayName: Description
   note.skills:
@@ -140,7 +152,7 @@ views:
       - progression
       - last_evaluated
     summaries:
-      score: Average
+      score: Evaluated mean
   - type: table
     name: Exams
     filters:
@@ -161,7 +173,7 @@ views:
       - status
       - mean
     summaries:
-      mean: Average
+      mean: Evaluated mean
   - type: list
     name: Projects
     filters:
@@ -198,6 +210,8 @@ properties:
     displayName: Name
   note.course:
     displayName: Course
+  note.status:
+    displayName: Status
   note.started_at:
     displayName: Date
   note.updated_at:

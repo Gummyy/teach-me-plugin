@@ -10,6 +10,36 @@ from teach_me.database import vault as vault_io
 from teach_me.tools import start_session
 
 
+def _check_filter(node, where: str) -> None:
+    """A filter is a string, or an object with one key (and, or, not) whose value is a list of filters : Obsidian refuses anything else."""
+    if isinstance(node, str):
+        return
+    assert isinstance(node, dict) and len(node) == 1, f"{where} : {node!r}"
+    (key, children), = node.items()
+    assert key in ("and", "or", "not") and isinstance(children, list) and children, f"{where} : '{key}' must hold a list of filters, got {children!r}"
+    for child in children:
+        _check_filter(child, where)
+
+
+@pytest.mark.parametrize("name", dashboards.BASES)
+def test_the_filters_are_well_formed(name):
+    base = yaml.safe_load(dashboards.BASES[name])
+    if "filters" in base:
+        _check_filter(base["filters"], name)
+    for view in base["views"]:
+        if "filters" in view:
+            _check_filter(view["filters"], f"{name}#{view['name']}")
+
+
+@pytest.mark.parametrize("name", dashboards.BASES)
+def test_the_summaries_exist(name):
+    base = yaml.safe_load(dashboards.BASES[name])
+    defaults = {"Average", "Min", "Max", "Sum", "Range", "Median", "Stddev", "Earliest", "Latest", "Checked", "Unchecked", "Empty", "Filled", "Unique"}
+    for view in base["views"]:
+        for summary in (view.get("summaries") or {}).values():
+            assert summary in defaults or summary in (base.get("summaries") or {}), f"{name}#{view['name']} : {summary}"
+
+
 @pytest.mark.parametrize("name", dashboards.BASES)
 def test_the_bases_are_valid(name):
     base = yaml.safe_load(dashboards.BASES[name])
