@@ -9,7 +9,7 @@ A Claude Code plugin with two skills :
 | -------------------------- | -------------------------------------------------------------------- |
 | `teach-me/`                | The skill : teaching one student, through the MCP tools              |
 | `teach-them/`              | The skill : preparing a course for a teacher, written in the vault   |
-| `shared/`                  | The references shared by the skills : pedagogy, course design, exams, diagrams |
+| `shared/`                  | The references shared by the skills : pedagogy, course design, exams, diagrams, Obsidian markdown |
 | `teach-me-mcp/`            | The MCP server : the memory of the teacher, stored in the vault      |
 | `.claude-plugin/`          | The plugin manifest and the marketplace that lists it                |
 | `scripts/setup_vault.py`   | Makes a vault usable in cloud sessions (see below)                   |

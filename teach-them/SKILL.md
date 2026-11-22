@@ -18,7 +18,7 @@ Before preparing anything, read [the teaching reference](../shared/teaching.md) 
 
 # Writing in an Obsidian vault
 
-Every note you write is a note of the teacher's Obsidian vault, in Obsidian Flavored Markdown. Before writing the first note of a conversation, load the session's skill about Obsidian Markdown and the skills about the user's own vaults or note conventions, and follow them; load the others (bases, canvas, ...) only when you write that kind of file. When they conflict with [the vault layout](references/vault_layout.md), follow the user's conventions and tell the teacher.
+Every note you write is a note of the teacher's Obsidian vault, in Obsidian Flavored Markdown. Before writing the first note of a conversation, load the session's skill about Obsidian Markdown and the skills about the user's own vaults or note conventions, and follow them; load the others (bases, canvas, ...) only when you write that kind of file. When the session has no skill about Obsidian markdown, read [the Obsidian reference](../shared/obsidian.md) instead. When they conflict with [the vault layout](references/vault_layout.md), follow the user's conventions and tell the teacher.
 
 # Course context
 
