@@ -201,7 +201,27 @@ def resource_notes() -> list[str]:
     return changed
 
 
-STEPS: list[Callable[[], list[str]]] = [add_types, flatten_exams, skill_notes, plan_notes, resource_notes]
+def views() -> list[str]:
+    """The bases and Home.md are written, the views of each course note too, and the generated report cards are deleted : the course note shows the report card."""
+    changed = [f"{path} : written" for path in dashboards.ensure_bases(force=True)]
+    for course in objects.iter_courses():
+        slug = objects.course_slug(course)
+        for path in sorted((objects.courses_dir() / slug).glob("report-card-*.md")):
+            if "generated_at" in vault.read(path).metadata:
+                path.unlink()
+                changed.append(f"{vault.relative(path)} : deleted, the course note shows the report card")
+        before = course.body
+        dashboards.render_course(course)
+        if course.body != before:
+            vault.write(course)
+            changed.append(f"{vault.relative(course.path)} : views")
+    if not dashboards.home_file().is_file():
+        dashboards.ensure_home()
+        changed.append("Home.md : written")
+    return changed
+
+
+STEPS: list[Callable[[], list[str]]] = [add_types, flatten_exams, skill_notes, plan_notes, resource_notes, views]
 
 
 def run() -> list[str]:

@@ -34,6 +34,7 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
             return {**result, "users": users, "next_step": "Several users share this vault : ask the student who they are, then call start_session again with `user`."}
         user = users[0]["slug"]
 
+    dashboards.ensure_home()
     profile = get_user(user)
     preferences = {**profile["preferences"], **(profile["interface_preferences"].get(interface) or {})}
     result.update({"user": profile, "preferences": preferences, "courses": list_courses(user)})

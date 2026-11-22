@@ -1,7 +1,6 @@
-"""Report card, generated from the course and its exams."""
+"""Report card of a course, for the chat. The course note shows the same, always up to date, with Obsidian bases."""
 
 from teach_me.database import objects, quiz, vault
-from teach_me.database.vault import Document
 
 
 def _cell(value) -> str:
@@ -10,13 +9,13 @@ def _cell(value) -> str:
 
 
 def report_card(course: str) -> str:
-    """Regenerates the report card of a course from its skills and exams : skills of the course, grade and progression of each skill (from the exams of all the courses that evaluate it), list of the exams of the course.
+    """The report card of a course, from its skills and exams : skills of the course, grade and progression of each skill (from the exams of all the courses that evaluate it), list of the exams of the course. The course note shows it too, always up to date : no need to call this tool for the vault.
 
     Args:
         course (str): The slug of the course
 
     Returns:
-        str: The report card, in markdown. It is also written to `courses/<course>/report-card-<course>.md`.
+        str: The report card, in markdown, to share in the chat
     """
     document = objects.get_course(course)
     metadata = document.metadata
@@ -54,12 +53,4 @@ def report_card(course: str) -> str:
     else:
         lines.append("No exam yet.")
 
-    content = "\n".join(lines)
-    vault.write(
-        Document(
-            objects.report_file(course),
-            {"course": objects.link("course", course, document.path), "generated_at": vault.format_time(vault.now())},
-            content,
-        )
-    )
-    return content
+    return "\n".join(lines)

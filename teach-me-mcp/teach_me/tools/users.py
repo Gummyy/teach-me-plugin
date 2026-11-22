@@ -2,7 +2,7 @@
 
 from typing import Literal, Optional
 
-from teach_me.database import objects, vault
+from teach_me.database import dashboards, objects, vault
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.schemas import InterfacePreferences, NewPreferences, Preferences, SkillDeclaration
@@ -150,6 +150,7 @@ def create_user(
         (description or "").strip(),
     )
     vault.write(document)
+    dashboards.ensure_home()
     return slug
 
 

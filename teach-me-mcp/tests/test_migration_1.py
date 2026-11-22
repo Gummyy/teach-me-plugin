@@ -105,5 +105,12 @@ def test_resources_are_notes(migrated):
     assert [r["slug"] for r in get_course_state("computer-vision")["new_resources"]] == ["3blue1brown-but-what-is-a-convolution"]
 
 
+def test_the_views_replace_the_report_card(migrated, tmp_path):
+    assert not (tmp_path / "courses/computer-vision/report-card-computer-vision.md").exists()
+    assert (tmp_path / "bases/course.base").is_file() and (tmp_path / "bases/home.base").is_file()
+    assert "![[home.base#Courses]]" in note("Home.md").body
+    assert "![[course.base#Skills]]" in note("courses/computer-vision/course-computer-vision.md").body
+
+
 def test_migrating_twice_changes_nothing(migrated):
     assert migrate_vault()["changes"] == []

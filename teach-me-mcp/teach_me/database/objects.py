@@ -8,9 +8,8 @@
     courses/<course>/exams/quiz-<exam>.md          (questions, solutions and grades in .teach-me/)
     courses/<course>/exams/exercise-<exam>.md      (project exams)
     courses/<course>/resources/resource-<resource>.md
-    courses/<course>/report-card-<course>.md       (generated)
 
-Every note has a `type` property (user, project, skill, course, class, quiz, exercise or resource), and the
+Every note has a `type` property (user, project, skill, course, class, quiz, exercise, resource, or home for Home.md), and the
 notes of a course a `course` property linking to it, so that Obsidian Bases can select them.
 
 Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps the file names
@@ -49,7 +48,6 @@ PREFIXES = {
     "project": "project-",
     "skill": "skill-",
     "course": "course-",
-    "report": "report-card-",
     "class": "class-",
     "quiz": "quiz-",
     "exercise": "exercise-",
@@ -102,10 +100,6 @@ def skill_file(skill: str) -> Path:
 
 def course_file(course: str) -> Path:
     return courses_dir() / course / f"{PREFIXES['course']}{course}.md"
-
-
-def report_file(course: str) -> Path:
-    return courses_dir() / course / f"{PREFIXES['report']}{course}.md"
 
 
 def resource_file(course: str, resource: str) -> Path:

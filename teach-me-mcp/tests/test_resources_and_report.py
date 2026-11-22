@@ -98,4 +98,4 @@ def test_report_card(course, vault):
     assert "**1/2** skills evaluated, average grade : **B** (3.0/5)" in card  # A and D
     assert "| [[skill-convolution\\|convolution]] | Computes and interprets a 2D convolution | B (3.0/5) | B |" in card
     assert "[[quiz-quiz-1\\|Quiz / 1]]" in card  # an alias can't contain a pipe, and the link's pipe is escaped in tables
-    assert (vault / "courses" / course / "report-card-computer-vision.md").is_file()
+    assert not (vault / "courses" / course / "report-card-computer-vision.md").exists()  # the course note shows it, always up to date

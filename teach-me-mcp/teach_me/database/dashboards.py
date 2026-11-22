@@ -1,7 +1,9 @@
 """The views of the vault : Obsidian bases, embedded in the notes, that show the data of the notes without anyone updating them.
 
-    bases/course.base     the views of a course, embedded in its note : `this` is the course note
-                          and its folder holds the notes of its steps
+    bases/course.base     the views of a course, embedded in its note : `this` is the course note,
+                          its folder holds the notes of its steps and resources, and it links to its skills and projects
+    bases/home.base       the views of Home.md, across the courses : exams to answer, last steps,
+                          resources to look at, skills to work on
 
 A course note starts with a generated block embedding these views (see `blocks.py`), then the
 student's "My notes" section, then the session log.
@@ -21,14 +23,15 @@ STEP_TYPES = ("class", "quiz", "exercise")
 
 _STEPS_FILTER = "\n".join(f"        - 'type == \"{kind}\"'" for kind in STEP_TYPES)
 
+_IN_COURSE = "        - 'file.inFolder(this.file.folder)'"
+
 COURSE_BASE = f"""# Written by teach-me : the views of a course, embedded in its note with ![[course.base#<view>]].
-# `this` is the course note, and its folder holds the notes of the course.
-filters:
-  and:
-    - 'file.inFolder(this.file.folder)'
+# `this` is the course note : its folder holds the notes of the course, and it links to its skills and projects.
 formulas:
   step: 'file.asLink(title)'
   resource: 'file.asLink(title)'
+  skill: 'file.asLink(name)'
+  project: 'file.asLink(name)'
   where: 'if(url, url, file)'
   kind: 'if(type == "class", "📖 class", if(type == "quiz", "❓ quiz", "🛠️ project"))'
   progress: 'if(status == "done" || status == "corrected", "✅ done", if(status == "planned", "⏳ planned", "✍️ " + status))'
@@ -37,6 +40,8 @@ properties:
     displayName: "#"
   formula.step:
     displayName: Step
+  formula.skill:
+    displayName: Skill
   formula.kind:
     displayName: Type
   note.description:
@@ -49,11 +54,22 @@ properties:
     displayName: Progress
   note.started_at:
     displayName: Date
+  note.grade:
+    displayName: Grade
+  note.score:
+    displayName: Score
+  note.progression:
+    displayName: Progression
+  note.last_evaluated:
+    displayName: Last evaluated
+  note.mean:
+    displayName: Mean
 views:
   - type: table
     name: Plan
     filters:
       and:
+{_IN_COURSE}
         - or:
 {_STEPS_FILTER}
         - 'status != "dropped"'
@@ -73,6 +89,7 @@ views:
     limit: 3
     filters:
       and:
+{_IN_COURSE}
         - or:
 {_STEPS_FILTER}
         - or:
@@ -93,6 +110,7 @@ views:
     limit: 3
     filters:
       and:
+{_IN_COURSE}
         - or:
 {_STEPS_FILTER}
         - 'status != "planned"'
@@ -105,9 +123,59 @@ views:
       - formula.step
       - formula.kind
       - formula.progress
+  - type: table
+    name: Skills
+    filters:
+      and:
+        - 'type == "skill"'
+        - 'this.file.hasLink(file)'
+    sort:
+      - property: file.name
+        direction: ASC
+    order:
+      - formula.skill
+      - description
+      - grade
+      - score
+      - progression
+      - last_evaluated
+    summaries:
+      score: Average
+  - type: table
+    name: Exams
+    filters:
+      and:
+{_IN_COURSE}
+        - or:
+            - 'type == "quiz"'
+            - 'type == "exercise"'
+        - 'status != "planned"'
+        - 'status != "dropped"'
+    sort:
+      - property: started_at
+        direction: ASC
+    order:
+      - started_at
+      - formula.step
+      - formula.kind
+      - status
+      - mean
+    summaries:
+      mean: Average
+  - type: list
+    name: Projects
+    filters:
+      and:
+        - 'type == "project"'
+        - 'this.file.hasLink(file)'
+    order:
+      - formula.project
   - type: kanban
     name: Resources
-    filters: 'type == "resource"'
+    filters:
+      and:
+{_IN_COURSE}
+        - 'type == "resource"'
     groupBy:
       property: note.status
       direction: ASC
@@ -122,7 +190,102 @@ views:
       - step
 """
 
-BASES = {"course.base": COURSE_BASE}
+HOME_BASE = """# Written by teach-me : the views of Home.md, across all the courses of the vault.
+formulas:
+  name: 'if(title, file.asLink(title), file.asLink(name))'
+properties:
+  formula.name:
+    displayName: Name
+  note.course:
+    displayName: Course
+  note.started_at:
+    displayName: Date
+  note.updated_at:
+    displayName: Last activity
+  note.grade:
+    displayName: Grade
+  note.score:
+    displayName: Score
+  note.progression:
+    displayName: Progression
+views:
+  - type: table
+    name: Courses
+    filters: 'type == "course"'
+    sort:
+      - property: updated_at
+        direction: DESC
+    order:
+      - formula.name
+      - status
+      - updated_at
+  - type: table
+    name: Exams to answer
+    filters:
+      and:
+        - or:
+            - 'type == "quiz"'
+            - 'type == "exercise"'
+        - or:
+            - 'status == "assigned"'
+            - 'status == "filled"'
+    sort:
+      - property: started_at
+        direction: ASC
+    order:
+      - formula.name
+      - course
+      - status
+      - started_at
+  - type: table
+    name: Last steps
+    limit: 5
+    filters:
+      and:
+        - or:
+            - 'type == "class"'
+            - 'type == "quiz"'
+            - 'type == "exercise"'
+        - 'status != "planned"'
+        - 'status != "dropped"'
+    sort:
+      - property: started_at
+        direction: DESC
+    order:
+      - started_at
+      - formula.name
+      - course
+      - status
+  - type: table
+    name: Resources to look at
+    filters:
+      and:
+        - 'type == "resource"'
+        - or:
+            - 'status == "new"'
+            - 'status == "seen"'
+    order:
+      - formula.name
+      - course
+      - status
+  - type: table
+    name: Skills to work on
+    limit: 10
+    filters:
+      and:
+        - 'type == "skill"'
+        - 'evaluations > 0'
+    sort:
+      - property: score
+        direction: ASC
+    order:
+      - formula.name
+      - grade
+      - score
+      - progression
+"""
+
+BASES = {"course.base": COURSE_BASE, "home.base": HOME_BASE}
 
 COURSE_DASHBOARD = """## 📍 Where you are
 
@@ -138,12 +301,46 @@ Next steps :
 
 ![[course.base#Plan]]
 
+## 🎓 Report card
+
+![[course.base#Skills]]
+
+![[course.base#Exams]]
+
+## 🛠️ Projects
+
+![[course.base#Projects]]
+
 ## 📚 Resources
 
 Drag a resource to *seen* once you had a look, and write what you thought of it in its note : your teacher will ask you about it.
 
 ![[course.base#Resources]]"""
 """The views at the top of a course note."""
+
+HOME_BLOCK = "home"
+HOME_DASHBOARD = """# 🏠 Home
+
+## Courses
+
+![[home.base#Courses]]
+
+## Exams to answer
+
+![[home.base#Exams to answer]]
+
+## Last steps
+
+![[home.base#Last steps]]
+
+## Resources to look at
+
+![[home.base#Resources to look at]]
+
+## Skills to work on
+
+![[home.base#Skills to work on]]"""
+"""The views of Home.md, the entry point of the vault."""
 
 
 def bases_dir() -> Path:
@@ -161,6 +358,21 @@ def ensure_bases(force: bool = False) -> list[str]:
         path.write_text(content, encoding="utf-8", newline="\n")
         written.append(vault.relative(path))
     return written
+
+
+def home_file() -> Path:
+    return vault.vault_path() / "Home.md"
+
+
+def ensure_home() -> None:
+    """Writes the bases and Home.md, the entry point of the vault, with its views written again if the student broke them."""
+    ensure_bases()
+    path = home_file()
+    document = vault.read(path) if path.is_file() else Document(path, {"type": "home", "created_at": vault.format_time(vault.now())}, "")
+    body = blocks.ensure_notes(blocks.replace(document.body, HOME_BLOCK, HOME_DASHBOARD, vault.format_session(vault.now()), first=True))
+    if body != document.body or document.mtime_ns is None:
+        document.body = body
+        vault.write(document)
 
 
 def render_course(course: Document) -> None:
