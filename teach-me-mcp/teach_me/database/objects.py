@@ -468,3 +468,54 @@ def iter_documents(course: str, kind: str) -> Iterator[Document]:
 
 def iter_exams(course: str) -> Iterator[Document]:
     yield from iter_documents(course, "exams")
+
+
+INTERFACES = ("terminal", "app")
+"""The interfaces a user has preferences for."""
+USER_PROPERTIES = ("type", "name", "created_at", "updated_at", "known_skills")
+"""The properties of a user note that aren't preferences."""
+SKILL_SEPARATOR = " : "
+"""Between the name and the description of a known skill : `known_skills` is a list of texts, e.g. "python : numpy and pandas"."""
+
+# The user note stores everything flat, so that Obsidian shows it and Bases can read it :
+#     language: french              a preference that doesn't depend on the interface
+#     terminal_quizzes: vault       a preference of one interface, prefixed by its name
+#     known_skills: ["python : numpy and pandas"]
+# The tools keep giving and taking them as dictionaries, as before.
+
+
+def read_preferences(metadata: dict) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+    """The preferences of a user note : (general, {interface: preferences})."""
+    general: dict[str, str] = {}
+    interfaces: dict[str, dict[str, str]] = {}
+    for key, value in metadata.items():
+        if key in USER_PROPERTIES or value is None:
+            continue
+        interface = next((name for name in INTERFACES if key.startswith(f"{name}_")), None)
+        if interface:
+            interfaces.setdefault(interface, {})[key.removeprefix(f"{interface}_")] = str(value)
+        else:
+            general[key] = str(value)
+    return general, interfaces
+
+
+def write_preferences(metadata: dict, general: dict[str, str], interfaces: dict[str, dict[str, str]]) -> dict:
+    """The properties of a user note with these preferences, after its own properties and before its known skills."""
+    own = {key: metadata[key] for key in USER_PROPERTIES if key in metadata and key != "known_skills"}
+    flat = {f"{interface}_{key}": value for interface in INTERFACES for key, value in (interfaces.get(interface) or {}).items()}
+    return {**own, **general, **flat, "known_skills": metadata.get("known_skills") or []}
+
+
+def read_known_skills(metadata: dict) -> list[dict]:
+    skills = []
+    for item in metadata.get("known_skills") or []:
+        if isinstance(item, dict):  # notes written before migration 2
+            skills.append({"name": str(item.get("name") or ""), "description": str(item.get("description") or "")})
+        else:
+            name, _, description = str(item).partition(SKILL_SEPARATOR)
+            skills.append({"name": name.strip(), "description": description.strip()})
+    return skills
+
+
+def write_known_skills(skills: list[dict]) -> list[str]:
+    return [f"{skill['name']}{SKILL_SEPARATOR}{skill['description']}" if skill.get("description") else skill["name"] for skill in skills]

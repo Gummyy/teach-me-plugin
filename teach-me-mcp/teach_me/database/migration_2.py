@@ -1,4 +1,4 @@
-"""Migration 2 : the views of version 1 fixed, now that they were checked in Obsidian.
+"""Migration 2 : the views of version 1 fixed, now that they were checked in Obsidian, and the user notes flat.
 
 Each step works on every note of the vault and returns one line per note it changed. The steps run in
 order, each one on the notes as the previous steps left them.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from teach_me.database import dashboards
+from teach_me.database import dashboards, objects, vault
 
 
 def views() -> list[str]:
@@ -17,7 +17,30 @@ def views() -> list[str]:
     return [f"{path} : written again" for path in dashboards.ensure_bases(force=True)]
 
 
-STEPS: list[Callable[[], list[str]]] = [views]
+def flat_users() -> list[str]:
+    """The preferences of a user note become properties of their own, those of an interface prefixed by its name,
+    and its known skills a list of texts : {"preferences": {"language": "french"}} -> {"language": "french"}."""
+    changed = []
+    for document in objects.iter_users():
+        metadata = document.metadata
+        nested = metadata.get("preferences"), metadata.get("interface_preferences")
+        if not any(isinstance(value, dict) for value in nested) and not any(isinstance(skill, dict) for skill in metadata.get("known_skills") or []):
+            continue
+        general = {key: str(value) for key, value in (nested[0] or {}).items() if value is not None}
+        interfaces = {
+            interface: {key: str(value) for key, value in (values or {}).items() if value is not None}
+            for interface, values in (nested[1] or {}).items()
+            if interface in objects.INTERFACES and isinstance(values, dict)
+        }
+        skills = objects.read_known_skills(metadata)
+        rest = {key: value for key, value in metadata.items() if key not in ("preferences", "interface_preferences")}
+        document.metadata = objects.write_preferences({**rest, "known_skills": objects.write_known_skills(skills)}, general, interfaces)
+        vault.write(document)
+        changed.append(f"{vault.relative(document.path)} : preferences and known skills flat")
+    return changed
+
+
+STEPS: list[Callable[[], list[str]]] = [views, flat_users]
 
 
 def run() -> list[str]:

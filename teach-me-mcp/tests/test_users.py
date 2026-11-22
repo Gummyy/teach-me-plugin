@@ -1,5 +1,6 @@
 import pytest
 
+from teach_me.database import vault as vault_io
 from teach_me.errors import ToolError
 from teach_me.tools import create_user, edit_user, get_user, list_users
 
@@ -58,7 +59,7 @@ def test_interface_preferences(vault):
     user = edit_user("alice", interface_preferences={"app": {"quizzes": "chat"}})
     assert user["interface_preferences"] == {"terminal": {"quizzes": "vault"}, "app": {"quizzes": "chat"}}
     user = edit_user("alice", interface_preferences={"terminal": {"quizzes": None}})  # removes one preference only
-    assert user["interface_preferences"] == {"terminal": {}, "app": {"quizzes": "chat"}}
+    assert user["interface_preferences"] == {"app": {"quizzes": "chat"}}
     with pytest.raises(ToolError, match="Unknown interface 'phone'"):
         edit_user("alice", interface_preferences={"phone": {"quizzes": "chat"}})
     with pytest.raises(ToolError, match="'in the chat' isn't a valid `quizzes`.*chat, vault"):
@@ -92,11 +93,17 @@ def test_description_is_added_to_or_replaced(vault):
     assert edit_user("alice", description="Likes hiking")["replaced"] == {}  # same text : nothing replaced
 
 
-def test_users_created_before_interface_preferences(vault):
-    create_user("Alice", {"language": "english"})
-    path = vault / "users" / "user-alice.md"
-    path.write_text(path.read_text(encoding="utf-8").replace("interface_preferences: {}\n", ""), encoding="utf-8")
-    assert get_user("alice")["interface_preferences"] == {}
+def test_the_user_note_is_flat(vault):
+    create_user("Alice", {"language": "english", "other": {"pace": "slow"}}, interface_preferences={"terminal": {"quizzes": "vault"}})
+    edit_user("alice", add_known_skills=[{"name": "python", "description": "numpy and pandas"}, {"name": "sql", "description": ""}])
+    metadata = vault_io.read(vault / "users" / "user-alice.md").metadata
+    assert list(metadata) == ["type", "name", "created_at", "language", "pace", "terminal_quizzes", "known_skills"]
+    assert metadata["known_skills"] == ["python : numpy and pandas", "sql"]
+    for name in ("name", "app_emojis"):
+        with pytest.raises(ToolError, match="can't be the name of a preference"):
+            edit_user("alice", preferences={"other": {name: "x"}})
+    with pytest.raises(ToolError, match="can't hold ':'"):
+        edit_user("alice", add_known_skills=[{"name": "go : fiber", "description": ""}])
 
 
 def test_edits_are_merged_not_replaced(vault):

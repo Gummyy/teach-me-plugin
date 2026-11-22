@@ -3,19 +3,17 @@
 from typing import Literal, Optional
 
 from teach_me.database import dashboards, objects, vault
+from teach_me.database.objects import INTERFACES, SKILL_SEPARATOR, USER_PROPERTIES, read_known_skills, read_preferences, write_known_skills, write_preferences
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.schemas import InterfacePreferences, NewPreferences, Preferences, SkillDeclaration
 
 MIN_USERNAME_LENGTH = 2
-INTERFACES = ("terminal", "app")
 Interface = Literal["terminal", "app"]
 """Where the student follows the course : a terminal shows markdown as raw text, an app or a browser renders it."""
 PREFERENCE_FIELDS = tuple(key for key in Preferences.__annotations__ if key != "other")
 INTERFACE_PREFERENCE_FIELDS = tuple(key for key in InterfacePreferences.__annotations__ if key != "other")
 PREFERENCE_CHOICES = {"quizzes": ("chat", "vault"), "diagrams": ("rendered", "raw", "avoid")}
-
-
 def _validate_skills(skills: list[SkillDeclaration], argument: str) -> list[dict]:
     cleaned, seen = [], set()
     for skill in skills:
@@ -24,6 +22,8 @@ def _validate_skills(skills: list[SkillDeclaration], argument: str) -> list[dict
             raise ToolError(f"Every item of `{argument}` needs a non empty 'name'.")
         if name.lower() in seen:
             raise ToolError(f"The skill '{name}' appears twice in `{argument}`.")
+        if SKILL_SEPARATOR.strip() in name:
+            raise ToolError(f"The name of the skill '{name}' can't hold '{SKILL_SEPARATOR.strip()}' : put the details in its description.")
         seen.add(name.lower())
         cleaned.append({"name": name, "description": str(skill.get("description") or "").strip()})
     return cleaned
@@ -50,6 +50,8 @@ def _flatten_preferences(values: dict, fields: tuple[str, ...], argument: str) -
         key = str(key).strip()
         if key in fields or key == "other":
             raise ToolError(f"'{key}' has its own key in `{argument}` : don't put it in `other`.")
+        if not key or key in USER_PROPERTIES or any(key.startswith(f"{interface}_") for interface in INTERFACES):
+            raise ToolError(f"'{key}' can't be the name of a preference in `{argument}` : choose another name.")
         flat[key] = None if value is None else str(value)
     return flat
 
@@ -134,21 +136,9 @@ def create_user(
     if not (flat.get("language") or "").strip():
         raise ToolError("`preferences` needs a `language` : the one the student talks to you in, unless they said otherwise.")
     slug = vault.unique_slug(vault.slugify(name), lambda s: objects.user_file(s).exists())
-    document = Document(
-        objects.user_file(slug),
-        {
-            "type": "user",
-            "name": name,
-            "created_at": vault.format_time(vault.now()),
-            "preferences": merge({}, flat),
-            "interface_preferences": {
-                interface: merge({}, values)
-                for interface, values in _validate_interface_preferences(interface_preferences or {}).items()
-            },
-            "known_skills": [],
-        },
-        (description or "").strip(),
-    )
+    interfaces = {interface: merge({}, values) for interface, values in _validate_interface_preferences(interface_preferences or {}).items()}
+    metadata = write_preferences({"type": "user", "name": name, "created_at": vault.format_time(vault.now())}, merge({}, flat), interfaces)
+    document = Document(objects.user_file(slug), metadata, (description or "").strip())
     vault.write(document)
     dashboards.ensure_home()
     return slug
@@ -190,16 +180,15 @@ def edit_user(
     document.body, previous = edit_text(document.body, description, add_to_description)
     if previous is not None:
         replaced["description"] = previous
+    general, interfaces = read_preferences(document.metadata)
     if preferences is not None:
-        changes = _flatten_preferences(preferences, PREFERENCE_FIELDS, "preferences")
-        document.metadata["preferences"] = merge(document.metadata.get("preferences"), changes)
+        general = merge(general, _flatten_preferences(preferences, PREFERENCE_FIELDS, "preferences"))
     if interface_preferences is not None:
-        current = dict(document.metadata.get("interface_preferences") or {})
         for interface, changes in _validate_interface_preferences(interface_preferences).items():
-            current[interface] = merge(current.get(interface), changes)
-        document.metadata["interface_preferences"] = current
+            interfaces[interface] = merge(interfaces.get(interface), changes)
+    document.metadata = write_preferences(document.metadata, general, interfaces)
     if add_known_skills or remove_known_skills:
-        skills = {str(skill.get("name")).lower(): skill for skill in document.metadata.get("known_skills") or [] if isinstance(skill, dict)}
+        skills = {skill["name"].lower(): skill for skill in read_known_skills(document.metadata)}
         unknown = [name for name in remove_known_skills or [] if name.lower() not in skills]
         if unknown:
             raise ToolError(f"Unknown known skills : {', '.join(unknown)}. Known skills : {', '.join(s['name'] for s in skills.values()) or 'none'}.")
@@ -207,7 +196,7 @@ def edit_user(
             skills.pop(name.lower())
         for skill in _validate_skills(add_known_skills or [], "add_known_skills"):
             skills[skill["name"].lower()] = skill
-        document.metadata["known_skills"] = list(skills.values())
+        document.metadata["known_skills"] = write_known_skills(list(skills.values()))
     vault.write(document)
     return {**get_user(user), "replaced": replaced}
 
@@ -223,12 +212,13 @@ def get_user(user: str) -> dict:
     """
     document = objects.get_user(user)
     metadata = document.metadata
+    general, interfaces = read_preferences(metadata)
     return {
         "slug": user,
         "name": str(metadata.get("name") or user),
         "description": document.body,
-        "preferences": metadata.get("preferences") or {},
-        "interface_preferences": metadata.get("interface_preferences") or {},
-        "known_skills": metadata.get("known_skills") or [],
+        "preferences": general,
+        "interface_preferences": interfaces,
+        "known_skills": read_known_skills(metadata),
         "created_at": metadata.get("created_at"),
     }
