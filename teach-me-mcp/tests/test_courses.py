@@ -172,3 +172,14 @@ def test_save_class_refuses_a_broken_link(course, vault):
 def test_log_session_refuses_a_broken_heading(course):
     with pytest.raises(ToolError, match="no heading 'Nope'"):
         log_session(course, "Reviewed [[skill-convolution#Nope]]")
+
+
+def test_every_note_has_a_type(course, vault):
+    save_class(course, "Kernels", "", "A class")
+    types = {path.relative_to(vault).as_posix(): vault_io.read(path).metadata.get("type") for path in vault.rglob("*.md")}
+    assert types["users/user-alice.md"] == "user"
+    assert types["projects/project-pet-classifier.md"] == "project"
+    assert types["skills/skill-convolution.md"] == "skill"
+    assert types["courses/computer-vision/course-computer-vision.md"] == "course"
+    assert types["courses/computer-vision/classes/class-kernels.md"] == "class"
+    assert vault_io.read(vault / "courses/computer-vision/classes/class-kernels.md").metadata["course"] == "[[course-computer-vision]]"

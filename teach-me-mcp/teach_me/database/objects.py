@@ -9,6 +9,9 @@
     courses/<course>/exams/exercise-<exam>.md      (project exams)
     courses/<course>/report-card-<course>.md       (generated)
 
+Every note has a `type` property (user, project, skill, course, class, quiz or exercise), and the
+notes of a course a `course` property linking to it, so that Obsidian Bases can select them.
+
 Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps the file names
 unique in the whole vault, so that every link points to exactly one note. The tools only see the slugs,
 without the prefix.
@@ -38,6 +41,8 @@ EXAM_TYPES = ("quiz", "project")
 EXAM_STATUSES = ("assigned", "filled", "corrected")
 EXAM_COEFFICIENTS = {"quiz": 1, "project": 2}
 """Weight of the questions of each type of exam in the grade of a skill."""
+EXAM_NOTE_TYPES = {"quiz": "quiz", "project": "exercise"}
+"""The `type` property of the note of each type of exam : a project exam is an exercise, 'project' is the type of the project notes."""
 RESOURCE_STATUSES = ("new", "explained", "unprocessed")
 DOCUMENT_KINDS = ("classes", "exams")
 
@@ -111,6 +116,16 @@ def slug(document: Union[Document, Path]) -> str:
         if stem.startswith(prefix):
             return stem[len(prefix):]
     return stem
+
+
+def exam_type(document: Document) -> str:
+    """The type of an exam, "quiz" or "project", from the `type` of its note."""
+    return "project" if document.metadata.get("type") in (EXAM_NOTE_TYPES["project"], "project") else "quiz"
+
+
+def course_link(course: str) -> str:
+    """The link to the note of a course, written in the `course` property of its classes and exams."""
+    return link("course", course, course_file(course))
 
 
 def unlink(value) -> str:
@@ -207,7 +222,7 @@ def skill_grades(user: str) -> dict[str, dict]:
     for exam in exams:
         if exam.metadata.get("status") != "corrected":
             continue
-        coefficient = EXAM_COEFFICIENTS.get(exam.metadata.get("type"), 1)
+        coefficient = EXAM_COEFFICIENTS[exam_type(exam)]
         for question in exam.metadata.get("questions") or []:
             if question.get("grade") not in quiz.GRADES:
                 continue

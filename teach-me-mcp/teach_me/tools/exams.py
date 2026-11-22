@@ -164,7 +164,7 @@ def create_exam(
     exam = objects.slug(path)
     label = objects.current_session(course_document)
     moment = vault.format_time(vault.now())
-    metadata = {"title": title, "type": type, "status": "assigned", "session": label}
+    metadata = {"type": objects.EXAM_NOTE_TYPES[type], "course": objects.course_link(course), "title": title, "status": "assigned", "session": label}
     if project is not None:
         metadata["project"] = objects.link("project", project, objects.project_file(project))
     metadata.update(
@@ -235,7 +235,7 @@ def read_exam(exam: str) -> dict:
     return {
         "slug": exam,
         "title": document.metadata.get("title"),
-        "type": document.metadata.get("type"),
+        "type": objects.exam_type(document),
         "status": document.metadata.get("status"),
         "path": vault.relative(document.path),
         "content": document.body,

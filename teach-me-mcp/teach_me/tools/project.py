@@ -49,7 +49,7 @@ def create_project(user: str, name: str, description: str) -> str:
     slug = vault.unique_slug(vault.slugify(name), lambda s: objects.project_file(s).exists())
     document = Document(
         objects.project_file(slug),
-        {"name": name.strip(), "user": objects.link("user", user, objects.user_file(user)), "created_at": vault.format_time(vault.now())},
+        {"type": "project", "name": name.strip(), "user": objects.link("user", user, objects.user_file(user)), "created_at": vault.format_time(vault.now())},
         (description or "").strip(),
     )
     vault.write(document)

@@ -123,6 +123,7 @@ def create_course(
     document = Document(
         objects.course_file(slug),
         {
+            "type": "course",
             "name": title,
             "user": objects.link("user", user, objects.user_file(user)),
             "status": "active",
@@ -342,7 +343,7 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         {
             "slug": objects.slug(exam),
             "title": exam.metadata.get("title"),
-            "type": exam.metadata.get("type"),
+            "type": objects.exam_type(exam),
             "status": exam.metadata.get("status"),
             "path": vault.relative(exam.path),
         }

@@ -115,6 +115,8 @@ def save_class(course: str, title: str, summary: str, content: str, planned: Opt
         Document(
             path,
             {
+                "type": "class",
+                "course": objects.course_link(course),
                 "title": title.strip(),
                 "summary": (summary or "").strip(),
                 "session": label,

@@ -15,6 +15,8 @@ vault/
     └── exams/quiz-<exam>.md           # or exercise-<exam>.md for a project exam
 ```
 
+Every note has a `type` property (`user`, `project`, `skill`, `course`, `class`, `quiz` or `exercise`), and the notes of a course a `course` property linking to it, so that Obsidian Bases can select them.
+
 Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps file names unique in the vault, so every link points to exactly one note. The tools only take slugs, without the prefix. Dates live in the frontmatter (`created_at`), and the order of the classes and exams in the plan of the course (`plan` in its frontmatter, shown in its `## Plan` section).
 
 The vault path is read from the `TEACH_ME_VAULT` environment variable (a relative path is relative to the working directory). The folder is created if it doesn't exist.

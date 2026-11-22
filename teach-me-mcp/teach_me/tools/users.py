@@ -137,6 +137,7 @@ def create_user(
     document = Document(
         objects.user_file(slug),
         {
+            "type": "user",
             "name": name,
             "created_at": vault.format_time(vault.now()),
             "preferences": merge({}, flat),

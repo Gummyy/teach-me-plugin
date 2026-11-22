@@ -58,7 +58,7 @@ def create_skills(user: str, skills: list[SkillDeclaration]) -> list[dict]:
         vault.write(
             Document(
                 objects.skill_file(slug),
-                {"name": skill["name"], "user": user_link, "created_at": moment},
+                {"type": "skill", "name": skill["name"], "user": user_link, "created_at": moment},
                 skill["description"],
             )
         )

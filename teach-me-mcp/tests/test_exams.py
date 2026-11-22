@@ -54,6 +54,7 @@ def test_create_exam_renders_the_questions_and_hides_the_solutions(course, vault
     assert exam == {"slug": "convolution-quiz", "path": "courses/computer-vision/exams/quiz-convolution-quiz.md", "questions": 3, "warnings": []}
     document = vault_io.read(vault / exam["path"])
     assert document.metadata["status"] == "assigned"
+    assert document.metadata["type"] == "quiz" and document.metadata["course"] == "[[course-computer-vision]]"
     assert document.metadata["skills"] == [
         {"skill": "[[skill-convolution|convolution]]", "grade": None, "score": None, "comment": None},
         {"skill": "[[skill-cnn-architecture|cnn-architecture]]", "grade": None, "score": None, "comment": None},
@@ -76,6 +77,7 @@ def test_exam_slugs_are_unique_across_quizzes_and_project_exams(course, vault):
     exercise = _create(course, [OPEN], type="project", project="pet-classifier")
     assert exercise["slug"] == "convolution-quiz-2" and exercise["path"].endswith("/exams/exercise-convolution-quiz-2.md")
     assert vault_io.read(vault / exercise["path"]).metadata["project"] == "[[project-pet-classifier]]"
+    assert vault_io.read(vault / exercise["path"]).metadata["type"] == "exercise"
     assert "[[exercise-convolution-quiz-2\\|Convolution quiz]] | 🛠️ project |" in objects.get_course(course).body
     with pytest.raises(ToolError, match="Unknown project 'nope'"):
         _create(course, [OPEN], type="project", project="nope")
