@@ -8,7 +8,7 @@ from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.project import project_summary
-from teach_me.tools.resources import resource_slug
+from teach_me.tools import resources as shared
 from teach_me.tools.schemas import CourseStatus, PlannedStep, StepUpdate
 from teach_me.tools.skill import check_skills, list_skills
 from teach_me.tools.users import edit_text
@@ -133,7 +133,6 @@ def create_course(
             "updated_at": vault.format_time(moment),
             "projects": project_links,
             "skills": skill_links,
-            "resources": [],
         },
         f"## {vault.format_session(moment)}\n\n- Course created",
     )
@@ -333,7 +332,8 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
             "sessions": [{"session", "entries"}], the last sessions, most recent first,
             "plan": {"done", "total", "next_steps"} : the number of steps done, and the next steps not done yet ({"slug", "kind", "title", "description", "skills", "importance", "progress"}) : pass the slug of the one you do as `planned` to save_class or create_exam. The whole plan is in the course note,
             "pending_exams": exams whose status is "assigned" or "filled",
-            "new_resources": shared resources whose status is "new" : [{"slug", "title", "web_url" or "file_path", "status", "session"}],
+            "new_resources": shared resources the student hasn't looked at yet : [{"slug", "title", "url" or "file", "status", "session", "step"}],
+            "resources_to_discuss": resources the student marked as seen or wrote notes about, in Obsidian : the same, with their "notes". Ask them what they thought, in one sentence, when the topic of the day allows it,
             "progress": {"classes_since_last_exam", "last_corrected_exam" ({"slug", "title", "mean", "shares"}), "advice"} : what to do next, computed from the classes and the exams,
         }
     """
@@ -354,11 +354,8 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
     ]
     steps = plans.with_progress(course, plans.course_plan(document))
     upcoming = [step for step in steps if step["progress"] != "done"]
-    resources = [
-        {"slug": resource_slug(resource), **resource}
-        for resource in metadata.get("resources") or []
-        if isinstance(resource, dict) and resource.get("status", "new") == "new"
-    ]
+    resources = [shared.summary(document) for document in objects.iter_resources(course)]
+    to_discuss = [resource for resource in resources if resource["status"] == "seen" or (resource["status"] == "new" and resource.get("notes"))]
     return {
         "slug": course,
         "name": metadata.get("name"),
@@ -370,6 +367,7 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         "skills": skills,
         "sessions": [{"session": label, "entries": entries} for label, entries in sessions],
         "pending_exams": pending,
-        "new_resources": resources,
+        "new_resources": [resource for resource in resources if resource["status"] == "new" and not resource.get("notes")],
+        "resources_to_discuss": to_discuss,
         "progress": _progress(course),
     }

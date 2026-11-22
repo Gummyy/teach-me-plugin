@@ -28,6 +28,8 @@ filters:
     - 'file.inFolder(this.file.folder)'
 formulas:
   step: 'file.asLink(title)'
+  resource: 'file.asLink(title)'
+  where: 'if(url, url, file)'
   kind: 'if(type == "class", "📖 class", if(type == "quiz", "❓ quiz", "🛠️ project"))'
   progress: 'if(status == "done" || status == "corrected", "✅ done", if(status == "planned", "⏳ planned", "✍️ " + status))'
 properties:
@@ -103,6 +105,21 @@ views:
       - formula.step
       - formula.kind
       - formula.progress
+  - type: kanban
+    name: Resources
+    filters: 'type == "resource"'
+    groupBy:
+      property: note.status
+      direction: ASC
+    groupOrder:
+      - new
+      - seen
+      - discussed
+      - dropped
+    order:
+      - formula.resource
+      - formula.where
+      - step
 """
 
 BASES = {"course.base": COURSE_BASE}
@@ -119,7 +136,13 @@ Next steps :
 
 ## 🗺️ Plan
 
-![[course.base#Plan]]"""
+![[course.base#Plan]]
+
+## 📚 Resources
+
+Drag a resource to *seen* once you had a look, and write what you thought of it in its note : your teacher will ask you about it.
+
+![[course.base#Resources]]"""
 """The views at the top of a course note."""
 
 

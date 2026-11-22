@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Callable, Optional
 
-from teach_me.database import dashboards, objects, quiz, vault
+from teach_me.database import blocks, dashboards, objects, quiz, vault
 from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 
@@ -173,7 +173,35 @@ def plan_notes() -> list[str]:
     return changed
 
 
-STEPS: list[Callable[[], list[str]]] = [add_types, flatten_exams, skill_notes, plan_notes]
+RESOURCE_STATUSES = {"explained": "discussed", "unprocessed": "dropped"}
+"""The statuses of the resources of 0.2, and their new name."""
+
+
+def resource_notes() -> list[str]:
+    """Each resource of the frontmatter of a course becomes a note of its own, in the resources/ folder of the course."""
+    changed = []
+    for course in objects.iter_courses():
+        slug = objects.course_slug(course)
+        resources = [resource for resource in course.metadata.get("resources") or [] if isinstance(resource, dict)]
+        taken = {objects.slug(path) for path in objects.courses_dir().glob(f"*/resources/{objects.PREFIXES['resource']}*.md")}
+        for resource in resources:
+            title = str(resource.get("title") or resource.get("slug") or "resource")
+            name = vault.unique_slug(str(resource.get("slug") or vault.slugify(title)), lambda candidate: candidate in taken)
+            taken.add(name)
+            location = {"file": resource["file_path"]} if resource.get("file_path") else {"url": resource.get("web_url", "")}
+            status = resource.get("status") or "new"
+            metadata = {"type": "resource", "course": objects.course_link(slug), "title": title, **location, "status": RESOURCE_STATUSES.get(status, status)}
+            metadata.update({"session": resource.get("session"), "created_at": resource.get("created_at"), "updated_at": resource.get("created_at")})
+            path = objects.resource_file(slug, name)
+            vault.write(Document(path, metadata, blocks.ensure_notes("")))
+            changed.append(f"{vault.relative(path)} : resource of the course, now a note")
+        if "resources" in course.metadata:
+            del course.metadata["resources"]
+            vault.write(course)
+    return changed
+
+
+STEPS: list[Callable[[], list[str]]] = [add_types, flatten_exams, skill_notes, plan_notes, resource_notes]
 
 
 def run() -> list[str]:

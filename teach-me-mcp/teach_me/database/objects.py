@@ -7,9 +7,10 @@
     courses/<course>/classes/class-<class>.md       (every step of the plan is a note, from the moment it is planned)
     courses/<course>/exams/quiz-<exam>.md          (questions, solutions and grades in .teach-me/)
     courses/<course>/exams/exercise-<exam>.md      (project exams)
+    courses/<course>/resources/resource-<resource>.md
     courses/<course>/report-card-<course>.md       (generated)
 
-Every note has a `type` property (user, project, skill, course, class, quiz or exercise), and the
+Every note has a `type` property (user, project, skill, course, class, quiz, exercise or resource), and the
 notes of a course a `course` property linking to it, so that Obsidian Bases can select them.
 
 Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps the file names
@@ -40,7 +41,7 @@ EXAM_COEFFICIENTS = {"quiz": 1, "project": 2}
 """Weight of the questions of each type of exam in the grade of a skill."""
 EXAM_NOTE_TYPES = {"quiz": "quiz", "project": "exercise"}
 """The `type` property of the note of each type of exam : a project exam is an exercise, 'project' is the type of the project notes."""
-RESOURCE_STATUSES = ("new", "explained", "unprocessed")
+RESOURCE_STATUSES = ("new", "seen", "discussed", "dropped")
 DOCUMENT_KINDS = ("classes", "exams")
 
 PREFIXES = {
@@ -52,6 +53,7 @@ PREFIXES = {
     "class": "class-",
     "quiz": "quiz-",
     "exercise": "exercise-",
+    "resource": "resource-",
 }
 EXAM_PREFIXES = {"quiz": PREFIXES["quiz"], "project": PREFIXES["exercise"]}
 """File prefix of each type of exam. 'project-' is taken by the projects."""
@@ -104,6 +106,17 @@ def course_file(course: str) -> Path:
 
 def report_file(course: str) -> Path:
     return courses_dir() / course / f"{PREFIXES['report']}{course}.md"
+
+
+def resource_file(course: str, resource: str) -> Path:
+    return courses_dir() / course / "resources" / f"{PREFIXES['resource']}{resource}.md"
+
+
+def iter_resources(course: str) -> Iterator[Document]:
+    """The resources shared in a course, in the order they were shared."""
+    documents = [vault.read(path) for path in (courses_dir() / course / "resources").glob(f"{PREFIXES['resource']}*.md")]
+    documents.sort(key=lambda document: (vault.parse_time(document.metadata.get("created_at")) or datetime.min, document.path.stem))
+    yield from documents
 
 
 def slug(document: Union[Document, Path]) -> str:

@@ -96,5 +96,14 @@ def test_a_course_of_teach_me_0_1(tmp_path, monkeypatch):
     assert "## Content" not in note("courses/computer-vision/course-computer-vision.md").body
 
 
+def test_resources_are_notes(migrated):
+    assert "resources" not in note("courses/computer-vision/course-computer-vision.md").metadata
+    video = note("courses/computer-vision/resources/resource-3blue1brown-but-what-is-a-convolution.md").metadata
+    assert video["type"] == "resource" and video["url"] == "https://www.youtube.com/watch?v=KuXjwB4LzSA" and video["status"] == "new"
+    old = note("courses/computer-vision/resources/resource-old-notes.md").metadata
+    assert old["file"] == "notes.pdf" and old["status"] == "dropped"  # was unprocessed
+    assert [r["slug"] for r in get_course_state("computer-vision")["new_resources"]] == ["3blue1brown-but-what-is-a-convolution"]
+
+
 def test_migrating_twice_changes_nothing(migrated):
     assert migrate_vault()["changes"] == []
