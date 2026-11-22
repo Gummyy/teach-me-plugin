@@ -6,8 +6,11 @@ the TEACH_ME_VAULT environment variable.
 
 from fastmcp import FastMCP
 
-from teach_me.database import vault
-from teach_me.tools import ALL_TOOLS
+from teach_me.database import migrations, vault
+from teach_me.tools import ALL_TOOLS, migrate_vault, repair_note
+
+WITHOUT_VERSION_CHECK = (migrate_vault, repair_note)
+"""The tools that work on a vault of any version : the others refuse an older vault until it is migrated."""
 
 mcp = FastMCP(
     name="teach-me",
@@ -19,7 +22,8 @@ mcp = FastMCP(
 )
 
 for tool in ALL_TOOLS:
-    mcp.tool(vault.serialized(tool))  # the lock of the vault : several sessions can share it
+    checked = tool if tool in WITHOUT_VERSION_CHECK else migrations.requires_current(tool)
+    mcp.tool(vault.serialized(checked))  # the lock of the vault : several sessions can share it
 
 
 def main() -> None:

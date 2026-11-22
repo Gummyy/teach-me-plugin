@@ -1,6 +1,6 @@
-"""Repairing the notes that the tools can't read anymore."""
+"""Repairing the notes that the tools can't read anymore, and migrating a vault written by an older version."""
 
-from teach_me.database import vault
+from teach_me.database import migrations, vault
 
 
 def repair_note(path: str, frontmatter: str) -> dict:
@@ -15,3 +15,12 @@ def repair_note(path: str, frontmatter: str) -> dict:
     """
     document = vault.repair(path, frontmatter)
     return {"path": vault.relative(document.path), "keys": list(document.metadata)}
+
+
+def migrate_vault() -> dict:
+    """Brings a vault written by an older version of teach-me to the current format. Call it only when a tool says the vault must be migrated. The notes are backed up first, in `.teach-me/backups/`.
+
+    Returns:
+        dict: {"from", "to", "backup", "changes"} : the versions of the vault before and after, the folder of the backup (relative to the vault), and one line per note changed
+    """
+    return migrations.migrate()

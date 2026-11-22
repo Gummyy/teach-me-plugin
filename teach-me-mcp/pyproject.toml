@@ -12,6 +12,7 @@ dependencies = [
 [project.scripts]
 teach-me-mcp = "teach_me.server:main"
 teach-vault = "teach_me.vault.cli:main"
+teach-me-migrate = "teach_me.database.migrations:main"
 
 [dependency-groups]
 dev = ["pytest>=8.0"]
