@@ -39,7 +39,7 @@ formulas:
   kind: 'if(type == "class", "📖 class", if(type == "quiz", "❓ quiz", "🛠️ project"))'
   progress: 'if(status == "done" || status == "corrected", "✅ done", if(status == "planned", "⏳ planned", "✍️ " + status))'
 summaries:
-  Evaluated mean: 'values.filter(value).mean().round(2)'
+  Evaluated: 'values.filter(value).mean().round(2)'
 properties:
   note.order:
     displayName: "#"
@@ -155,7 +155,7 @@ views:
       - progression
       - last_evaluated
     summaries:
-      score: Evaluated mean
+      score: Evaluated
   - type: table
     name: Exams
     filters:
@@ -176,7 +176,7 @@ views:
       - status
       - mean
     summaries:
-      mean: Evaluated mean
+      mean: Evaluated
   - type: list
     name: Projects
     filters:
@@ -213,7 +213,7 @@ formulas:
   skill: 'file.asLink(name)'
   courses: 'file.backlinks.filter(value.asFile().properties.type == "course" && value.asFile().hasLink(this.file))'
 summaries:
-  Evaluated mean: 'values.filter(value).mean().round(2)'
+  Evaluated: 'values.filter(value).mean().round(2)'
 properties:
   formula.course:
     displayName: Course
@@ -270,7 +270,7 @@ views:
       - progression
       - last_evaluated
     summaries:
-      score: Evaluated mean
+      score: Evaluated
 """
 
 HOME_BASE = """# Written by teach-me : the views of Home.md, across all the courses of the vault.

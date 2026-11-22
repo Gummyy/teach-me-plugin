@@ -19,5 +19,5 @@ obsidian vault="$vault" eval code="new Promise(r => setTimeout(() => r(1), 1500)
 grep -E "^    name: " "$dir/$tmp" | sed -e 's/^    name: //' -e 's/^"\(.*\)"$/\1/' | while read -r view; do
   if [ -n "$only" ] && [ "$only" != "$view" ]; then continue; fi
   echo "== $view"
-  obsidian vault="$vault" base:query path="$tmp" view="$view" format=md
+  obsidian vault="$vault" base:query path="$tmp" view="$view" format=md < /dev/null  # it would read the views otherwise
 done
