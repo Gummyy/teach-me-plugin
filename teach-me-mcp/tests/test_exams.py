@@ -72,7 +72,7 @@ def test_create_exam_renders_the_questions_and_hides_the_solutions(course, vault
     assert solutions == [["A"], ["A", "B"], OPEN["expected_answer"]]
     state = get_course_state(course)
     assert state["pending_exams"][0]["slug"] == "convolution-quiz"
-    assert "| 2 | [[quiz-convolution-quiz\\|Convolution quiz]] | ❓ quiz |" in objects.get_course(course).body
+    assert document.metadata["order"] == 2 and document.metadata["started_at"]
     assert get_course_state(course)["plan"]["next_steps"][1]["progress"] == "in progress"
 
 
@@ -82,7 +82,6 @@ def test_exam_slugs_are_unique_across_quizzes_and_project_exams(course, vault):
     assert exercise["slug"] == "convolution-quiz-2" and exercise["path"].endswith("/exams/exercise-convolution-quiz-2.md")
     assert vault_io.read(vault / exercise["path"]).metadata["project"] == "[[project-pet-classifier]]"
     assert vault_io.read(vault / exercise["path"]).metadata["type"] == "exercise"
-    assert "[[exercise-convolution-quiz-2\\|Convolution quiz]] | 🛠️ project |" in objects.get_course(course).body
     with pytest.raises(ToolError, match="Unknown project 'nope'"):
         _create(course, [OPEN], type="project", project="nope")
 
@@ -275,7 +274,6 @@ def test_correct_exam_grades_in_one_call(course):
     assert result["grades"] == ["A", "A", "B"]
     plan = get_course_state(course)["plan"]
     assert plan["done"] == 1 and plan["next_steps"][0]["slug"] == "convolution"  # the class of the plan is still to do
-    assert "✅ done" in objects.get_course(course).body
 
 
 def test_correct_exam_completes_the_grades_given_before(course):

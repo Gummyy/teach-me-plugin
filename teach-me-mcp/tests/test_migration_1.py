@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from teach_me.database import migrations, objects, vault
-from teach_me.tools import migrate_vault
+from teach_me.tools import get_course_state, migrate_vault
 
 FIXTURE = Path(__file__).parent / "fixtures" / "teach_me_v0_vault"
 
@@ -56,6 +56,44 @@ def test_skill_notes_show_their_grade(migrated):
     assert "| A | 4.5/5 | Good start. |" in skill.body and skill.body.endswith("## ✏️ My notes")
     untouched = note("skills/skill-cnn-architecture.md")
     assert untouched.metadata["grade"] is None and "Not evaluated yet" in untouched.body
+
+
+def test_each_step_of_the_plan_is_a_note(migrated):
+    course = note("courses/computer-vision/course-computer-vision.md")
+    assert "plan" not in course.metadata and "## Plan" not in course.body
+    assert course.body.startswith("%% teach-me:dashboard start %%") and course.body.index("## ✏️ My notes") < course.body.index("- Course created")
+    expected = [
+        ("classes/class-convolution.md", 1, "done", "Kernels and feature maps"),
+        ("exams/quiz-convolution-quiz.md", 2, "corrected", ""),
+        ("classes/class-pooling.md", 3, "done", "Max pooling."),
+        ("classes/class-cnn-architectures.md", 4, "planned", ""),
+        ("exams/exercise-first-cnn.md", 5, "planned", "Train a CNN on the pictures"),
+    ]
+    for path, order, status, description in expected:
+        metadata = note(f"courses/computer-vision/{path}").metadata
+        assert (metadata["order"], metadata["status"], metadata["description"]) == (order, status, description), path
+    lesson = note("courses/computer-vision/classes/class-convolution.md").metadata
+    assert "summary" not in lesson and lesson["started_at"] == lesson["created_at"]
+    assert lesson["suggested_resources"] == ["3Blue1Brown on convolutions"] and lesson["skills"] == ["[[skill-convolution]]"]
+    assert note("courses/computer-vision/classes/class-pooling.md").metadata["added"] is True
+    assert note("courses/computer-vision/exams/exercise-first-cnn.md").metadata["type"] == "exercise"
+    assert get_course_state("computer-vision")["plan"]["done"] == 3
+
+
+def test_a_course_of_teach_me_0_1(tmp_path, monkeypatch):
+    """Before the plans, a course listed its classes and exams in a "## Content" section."""
+    shutil.copytree(FIXTURE, tmp_path, dirs_exist_ok=True)
+    monkeypatch.setenv(vault.VAULT_ENV, str(tmp_path))
+    course = note("courses/computer-vision/course-computer-vision.md")
+    del course.metadata["plan"]
+    start, end = course.body.index("## Plan"), course.body.index("## 20")
+    course.body = course.body[:start] + "## Content\n\n1. Class : [[class-convolution|Convolution]]\n\n" + course.body[end:]
+    vault.write(course)
+    migrate_vault()
+    steps = get_course_state("computer-vision")["plan"]
+    assert steps["total"] == 3  # the class of the content, then the documents it didn't list
+    assert note("courses/computer-vision/classes/class-convolution.md").metadata["order"] == 1
+    assert "## Content" not in note("courses/computer-vision/course-computer-vision.md").body
 
 
 def test_migrating_twice_changes_nothing(migrated):

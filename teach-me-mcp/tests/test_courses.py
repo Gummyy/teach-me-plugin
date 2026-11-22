@@ -30,7 +30,10 @@ def test_create_course(course, vault):
     assert document.metadata["projects"] == ["[[project-pet-classifier]]"]
     assert document.metadata["skills"] == ["[[skill-convolution]]", "[[skill-cnn-architecture]]"]
     assert document.metadata["status"] == "active"
-    assert document.body.startswith("## Plan") and document.body.index("## Plan") < document.body.index("- Course created")
+    assert "plan" not in document.metadata  # each step is a note of its own
+    assert document.body.startswith("%% teach-me:dashboard start %%") and "![[course.base#Plan]]" in document.body
+    assert document.body.index("## ✏️ My notes") < document.body.index("- Course created")
+    assert (vault / "bases" / "course.base").is_file()
     assert len(objects.parse_sessions(document.body)) == 1
 
 
@@ -98,11 +101,12 @@ def test_save_class(course, vault):
     saved = save_class(course, "Convolution", "Definition and kernels", "# Convolution\n\nContent", planned="convolution")
     assert saved == {"slug": "convolution", "path": "courses/computer-vision/classes/class-convolution.md", "warnings": []}
     document = vault_io.read(vault / saved["path"])
-    assert document.metadata["title"] == "Convolution"
+    assert document.metadata["title"] == "Convolution" and document.metadata["description"] == "Definition and kernels"
+    assert document.metadata["status"] == "done" and document.metadata["order"] == 1 and document.metadata["started_at"]
+    assert document.metadata["skills"] == ["[[skill-convolution]]"]  # from the plan
     assert document.body == "# Convolution\n\nContent"
     assert "Class [[class-convolution|Convolution]]" in get_course_state(course)["sessions"][0]["entries"]
-    assert "| 1 | [[class-convolution\\|Convolution]] | 📖 class |" in objects.get_course(course).body
-    assert "✅ done" in objects.get_course(course).body
+    assert get_course_state(course)["plan"]["done"] == 1
 
 
 def test_same_class_title_gets_a_new_slug(course):

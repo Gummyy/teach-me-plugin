@@ -53,6 +53,12 @@ def content(body: str, name: str) -> Optional[str]:
     return match.group("content").strip("\n") if match else None
 
 
+def remove(body: str, name: str) -> str:
+    """The body without the block `name`, nor any stray marker of it."""
+    body = _pattern(name).sub("", body)
+    return _markers(name).sub("", body).strip("\n")
+
+
 def notes_bounds(body: str) -> Optional[tuple[int, int]]:
     """Start and end of the "My notes" section, heading included, or None."""
     match = re.search(rf"^{re.escape(NOTES_HEADING)}[ \t]*$", body, re.MULTILINE)

@@ -1,6 +1,7 @@
 import pytest
 
-from teach_me.database import objects
+from teach_me.database import blocks, objects
+from teach_me.database import plan as plans
 from teach_me.database import vault as vault_io
 from teach_me.errors import ToolError
 from teach_me.tools import create_course, create_exam, create_skills, edit_course, get_course_state, list_courses, save_class, start_session
@@ -9,14 +10,25 @@ from tests.conftest import ONE_STEP, PLAN
 QUESTION = {"kind": "single", "text": "?", "skills": ["convolution"], "options": ["Yes", "No"], "correct_options": ["A"]}
 
 
-def test_the_plan_is_a_table_of_links(course):
-    document = objects.get_course(course)
-    assert [step["slug"] for step in document.metadata["plan"]] == ["convolution", "convolution-quiz", "cnn-architectures", "first-cnn"]
-    assert "| # | Step | Type | Description | Skills | Importance | Progress |" in document.body
-    assert "| 4 | [[exercise-first-cnn\\|First CNN]] | 🛠️ project | Train a CNN on the pictures | convolution, cnn-architecture | core | ⏳ planned |" in document.body
+def note(vault, stem):
+    folder = "classes" if stem.startswith("class-") else "exams"
+    return vault_io.read(vault / "courses" / "computer-vision" / folder / f"{stem}.md")
+
+
+def test_each_step_is_a_planned_note(course, vault):
+    stems = ["class-convolution", "quiz-convolution-quiz", "class-cnn-architectures", "exercise-first-cnn"]
+    for order, stem in enumerate(stems, 1):
+        metadata = note(vault, stem).metadata
+        assert metadata["order"] == order and metadata["status"] == "planned" and metadata["course"] == "[[course-computer-vision]]"
+    last = note(vault, "exercise-first-cnn")
+    assert last.metadata["type"] == "exercise" and last.metadata["description"] == "Train a CNN on the pictures"
+    assert last.metadata["skills"] == ["[[skill-convolution]]", "[[skill-cnn-architecture]]"] and last.metadata["importance"] == "core"
+    assert "> [!todo] Planned" in last.body
+    assert "![[course.base#Next steps]]" in objects.get_course(course).body
     state = get_course_state(course)
     assert state["plan"]["done"] == 0 and state["plan"]["total"] == 4
     assert [step["slug"] for step in state["plan"]["next_steps"]] == ["convolution", "convolution-quiz", "cnn-architectures"]
+    assert state["pending_exams"] == []  # a planned exam isn't waiting for answers
 
 
 def test_create_course_checks_the_plan(course):
@@ -40,17 +52,19 @@ def test_a_course_that_already_exists_is_refused(course):
         create_course("alice", "Again", "", ["convolution"], plan=ONE_STEP, name="Computer Vision")
 
 
-def test_a_document_outside_the_plan_is_added_with_a_warning(course):
+def test_a_document_outside_the_plan_is_added_with_a_warning(course, vault):
     save_class(course, "Convolution", "", "Content", planned="convolution")
     saved = save_class(course, "Padding", "Borders of the picture", "Content")
     assert saved["slug"] == "padding" and "wasn't in the plan" in saved["warnings"][0]
     assert "convolution-quiz" not in saved["warnings"][0] and "cnn-architectures ('CNN architectures')" in saved["warnings"][0]
-    steps = objects.get_course(course).metadata["plan"]
+    steps = plans.course_plan(objects.get_course(course))
     assert [step["slug"] for step in steps][:3] == ["convolution", "padding", "convolution-quiz"]  # after the last step done
-    assert steps[1]["added"] is True and "optional · ➕ added" in objects.get_course(course).body
+    padding = note(vault, "class-padding").metadata
+    assert padding["added"] is True and padding["order"] == 2 and padding["status"] == "done"
+    assert note(vault, "quiz-convolution-quiz").metadata["order"] == 3
     exam = create_exam(course, "Surprise", "quiz", [QUESTION])
     assert "wasn't in the plan" in exam["warnings"][0]
-    assert objects.get_course(course).metadata["plan"][2]["skills"] == ["convolution"]
+    assert plans.course_plan(objects.get_course(course))[2]["skills"] == ["convolution"]
 
 
 def test_planned_class_must_be_a_class_to_do(course):
@@ -61,7 +75,16 @@ def test_planned_class_must_be_a_class_to_do(course):
         save_class(course, "Convolution", "", "Content", planned="convolution")
 
 
-def test_edit_course_changes_the_plan_step_by_step(course):
+def test_what_the_student_wrote_in_a_planned_note_is_kept(course, vault):
+    path = vault / "courses/computer-vision/classes/class-convolution.md"
+    path.write_text(path.read_text(encoding="utf-8").replace("## ✏️ My notes", "## ✏️ My notes\n\nWhat is a kernel ?"), encoding="utf-8")
+    save_class(course, "Convolution", "", "# Convolution\n\nContent", planned="convolution")
+    body = vault_io.read(path).body
+    assert body.startswith("# Convolution") and "Planned" not in body
+    assert blocks.notes(body) == "What is a kernel ?"
+
+
+def test_edit_course_changes_the_plan_step_by_step(course, vault):
     create_skills("alice", [{"name": "Pooling", "description": "Downsamples a feature map"}])
     edited = edit_course(
         course,
@@ -75,7 +98,23 @@ def test_edit_course_changes_the_plan_step_by_step(course):
     assert edited["plan"][3]["title"] == "My first CNN" and edited["plan"][3]["progress"] == "planned"
     assert edited["skills"] == ["convolution", "cnn-architecture", "pooling"]
     assert edited["warnings"] == [] and edited["replaced"] == {}
-    assert "[[exercise-first-cnn\\|My first CNN]]" in objects.get_course(course).body
+    assert note(vault, "exercise-first-cnn").metadata["title"] == "My first CNN"
+    assert [note(vault, stem).metadata["order"] for stem in ("class-cnn-architectures", "class-convolution", "class-pooling", "exercise-first-cnn")] == [1, 2, 3, 4]
+    assert not (vault / "courses/computer-vision/exams/quiz-convolution-quiz.md").exists()  # nothing was written in it
+
+
+def test_a_removed_step_the_student_wrote_in_is_dropped(course, vault):
+    path = vault / "courses/computer-vision/exams/quiz-convolution-quiz.md"
+    path.write_text(path.read_text(encoding="utf-8") + "\n\nRevise the kernels first\n", encoding="utf-8")
+    edit_course(course, remove_steps=["convolution-quiz"])
+    assert vault_io.read(path).metadata["status"] == "dropped"
+    assert "convolution-quiz" not in [step["slug"] for step in get_course_state(course)["plan"]["next_steps"]]
+
+
+def test_the_skills_of_an_exam_given_are_its_questions(course):
+    create_exam(course, "Convolution quiz", "quiz", [QUESTION], planned="convolution-quiz")
+    with pytest.raises(ToolError, match="already given"):
+        edit_course(course, update_steps=[{"step": "convolution-quiz", "skills": ["cnn-architecture"]}])
 
 
 def test_edit_course_texts_and_status(course):
@@ -108,19 +147,10 @@ def test_start_session_points_to_the_next_step(course):
     assert 'planned="convolution"' in start_session("terminal", user="alice", course=course)["next_step"]
 
 
-def test_a_course_created_before_the_plans_gets_one(course, vault):
-    save_class(course, "Convolution", "Kernels", "Content", planned="convolution")
+def test_the_views_of_a_course_are_written_again_when_broken(course, vault):
     document = objects.get_course(course)
-    del document.metadata["plan"]
-    del document.metadata["status"]
-    start = document.body.index("## Plan")
-    end = document.body.index("## 20")
-    document.body = document.body[:start] + "## Content\n\n1. Class : [[class-convolution|Convolution]]\n\n" + document.body[end:]
+    document.body = document.body.replace("![[course.base#Plan]]", "My own plan")
     vault_io.write(document)
-
-    state = get_course_state(course)
-    assert state["status"] == "active" and state["plan"]["done"] == 1 and state["plan"]["total"] == 1
-    start_session("app", user="alice", course=course)  # migrates it
-    migrated = objects.get_course(course)
-    assert migrated.metadata["plan"] == [{"slug": "convolution", "kind": "class", "title": "Convolution", "description": "Kernels", "skills": [], "importance": "core"}]
-    assert "## Content" not in migrated.body and migrated.body.startswith("## Plan")
+    start_session("app", user="alice", course=course)
+    body = objects.get_course(course).body
+    assert "![[course.base#Plan]]" in body and "> My own plan" in blocks.notes(body)

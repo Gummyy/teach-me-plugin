@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from teach_me.database import objects, vault
+from teach_me.database import dashboards, objects, vault
 from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
@@ -49,7 +49,7 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
     if owner != user:
         raise ToolError(f"The course '{course}' belongs to '{owner}', not to '{user}'.")
     objects.append_to_session(document, f"Session in the {interface}")
-    plans.render(document)  # a course created before the plans gets one
+    dashboards.render_course(document)  # the views, written again if the student broke them
     vault.write(document)
     state = get_course_state(course)
     steps = [" ".join(state["progress"]["advice"]) or "Continue the course where the last session stopped."]
@@ -90,7 +90,7 @@ def save_class(course: str, title: str, summary: str, content: str, planned: Opt
     Args:
         course (str): The slug of the course
         title (str): The title of the class
-        summary (str): 2-4 sentences about what is taught
+        summary (str): 2-4 sentences about what is taught. It replaces the description of the step in the plan
         content (str): The class itself, in markdown
         planned (Optional[str]): The slug of the class step of the plan this class is, from get_course_state's `plan.next_steps`. Leave it out only for a class the plan didn't foresee : it is then added to the plan, with a warning. Defaults to None.
 
@@ -111,22 +111,13 @@ def save_class(course: str, title: str, summary: str, content: str, planned: Opt
         warnings.append(warning)
     path = objects.step_file(course, step)
     label = objects.current_session(course_document)
-    vault.write(
-        Document(
-            path,
-            {
-                "type": "class",
-                "course": objects.course_link(course),
-                "title": title.strip(),
-                "summary": (summary or "").strip(),
-                "session": label,
-                "created_at": vault.format_time(vault.now()),
-            },
-            content,
-        )
-    )
+    moment = vault.format_time(vault.now())
+    metadata = {"title": title.strip(), "status": "done", "session": label, "started_at": moment, "updated_at": moment}
+    if (summary or "").strip():
+        metadata["description"] = summary.strip()
+    plans.fill(path, metadata, content)
     class_link = objects.link("class", objects.slug(path), path, alias=title.strip())
     objects.append_to_session(course_document, f"Class {class_link}")
-    plans.render(course_document)
+    dashboards.render_course(course_document)
     vault.write(course_document)
     return {"slug": step["slug"], "path": vault.relative(path), "warnings": warnings}

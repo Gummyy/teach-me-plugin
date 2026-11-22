@@ -3,8 +3,8 @@
     users/user-<user>.md
     projects/project-<project>.md
     skills/skill-<skill>.md                        (owned by a user, shared by their courses ; its grade and history)
-    courses/<course>/course-<course>.md            (links to its skills, its plan and the session log)
-    courses/<course>/classes/class-<class>.md
+    courses/<course>/course-<course>.md            (links to its skills and projects, the views of the course and the session log)
+    courses/<course>/classes/class-<class>.md       (every step of the plan is a note, from the moment it is planned)
     courses/<course>/exams/quiz-<exam>.md          (questions, solutions and grades in .teach-me/)
     courses/<course>/exams/exercise-<exam>.md      (project exams)
     courses/<course>/report-card-<course>.md       (generated)
@@ -32,10 +32,6 @@ from teach_me.errors import ToolError
 SESSION_TIMEOUT = timedelta(hours=3)
 """A new session starts when the last activity on a course is older than this."""
 SESSION_HEADING = re.compile(r"^## (\d{4}-\d{2}-\d{2} \d{2}:\d{2})[ \t]*$", re.MULTILINE)
-CONTENT_HEADING = "## Content"
-"""The section that listed the classes and exams of a course before the plan replaced it."""
-PLAN_HEADING = "## Plan"
-"""The section of course.md showing its plan as a table. It comes before the session log."""
 STEP_FOLDERS = {"class": "classes", "quiz": "exams", "project": "exams"}
 """Folder of the document of each kind of step of a plan."""
 EXAM_TYPES = ("quiz", "project")
@@ -376,24 +372,6 @@ def step_file(course: str, step: dict) -> Path:
     return courses_dir() / course / STEP_FOLDERS[step["kind"]] / f"{step_prefix(step['kind'])}{step['slug']}.md"
 
 
-def section(body: str, heading: str) -> Optional[tuple[int, int]]:
-    """Start and end of a "## " section of a body, heading included, or None."""
-    match = re.search(rf"^{re.escape(heading)}[ \t]*$", body, re.MULTILINE)
-    if match is None:
-        return None
-    following = re.search(r"^## ", body[match.end():], re.MULTILINE)
-    return match.start(), match.end() + following.start() if following else len(body)
-
-
-def legacy_content(body: str) -> list[tuple[str, Optional[str]]]:
-    """The (file name, alias) of the notes linked in the "## Content" section of a course created before the plans."""
-    bounds = section(body, CONTENT_HEADING)
-    if bounds is None:
-        return []
-    links = re.findall(r"\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]", body[bounds[0]:bounds[1]])
-    return list(dict.fromkeys((stem.strip(), alias.strip() or None) for stem, alias in links))
-
-
 # --------------------------------------------------------------------------- #
 # Sessions : dated entries in the body of course.md, after its content
 # --------------------------------------------------------------------------- #
@@ -467,22 +445,14 @@ def document_course(document: Document) -> str:
     return document.path.parent.parent.name
 
 
-def content_order(course: str) -> dict[str, int]:
-    """Position of each class and exam in the plan of a course (or its old "## Content" section), by file name."""
-    document = get_course(course)
-    plan = [step for step in document.metadata.get("plan") or [] if isinstance(step, dict) and step.get("kind") in STEP_FOLDERS]
-    stems = [f"{step_prefix(step['kind'])}{step.get('slug')}" for step in plan] or [stem for stem, _ in legacy_content(document.body)]
-    return {stem: index for index, stem in enumerate(dict.fromkeys(stems))}
-
-
 def iter_documents(course: str, kind: str) -> Iterator[Document]:
-    """The classes or the exams of a course, in chronological order : by date, then in the order of the content of the course."""
-    order = content_order(course)
+    """The classes or the exams of a course that were given (not only planned), in chronological order : by date, then in the order of the plan."""
     documents = [vault.read(path) for path in (courses_dir() / course / kind).glob("*.md")]
+    documents = [document for document in documents if document.metadata.get("status") not in ("planned", "dropped")]
     documents.sort(
         key=lambda document: (
-            vault.parse_time(document.metadata.get("created_at")) or datetime.min,
-            order.get(document.path.stem, len(order)),
+            vault.parse_time(document.metadata.get("started_at")) or vault.parse_time(document.metadata.get("created_at")) or datetime.min,
+            document.metadata.get("order") if isinstance(document.metadata.get("order"), int) else 0,
             document.path.stem,
         )
     )

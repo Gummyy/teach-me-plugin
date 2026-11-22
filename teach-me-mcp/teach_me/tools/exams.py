@@ -14,7 +14,7 @@ A long project exam can be graded in several steps with grade_questions before c
 import json
 from typing import Literal, Optional
 
-from teach_me.database import objects, quiz, vault
+from teach_me.database import dashboards, objects, quiz, vault
 from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
@@ -168,19 +168,19 @@ def create_exam(
     exam = objects.slug(path)
     label = objects.current_session(course_document)
     moment = vault.format_time(vault.now())
-    metadata = {"type": objects.EXAM_NOTE_TYPES[type], "course": objects.course_link(course), "title": title, "status": "assigned", "session": label}
+    metadata = {"title": title, "status": "assigned", "session": label}
     if project is not None:
         metadata["project"] = objects.link("project", project, objects.project_file(project))
     metadata.update(
         {
-            "created_at": moment,
-            "updated_at": moment,
             "skills": [objects.link("skill", skill, objects.skill_file(skill)) for skill in skills],
             "questions": len(public),
             "mean": None,
+            "started_at": moment,
+            "updated_at": moment,
         }
     )
-    vault.write(Document(path, metadata, quiz.render_exam(title, intro or "", public, skill_links)))
+    plans.fill(path, metadata, quiz.render_exam(title, intro or "", public, skill_links))
     objects.write_exam_data(exam, {"questions": [_stored(question) for question in public], "skills": {}})
 
     solutions_file = _solutions_file(exam)
@@ -189,7 +189,7 @@ def create_exam(
 
     exam_link = objects.link("exam", exam, path, alias=title)
     objects.append_to_session(course_document, f"Exam {exam_link} assigned ({type}, {len(public)} questions)")
-    plans.render(course_document)
+    dashboards.render_course(course_document)
     vault.write(course_document)
     return {"slug": exam, "path": vault.relative(path), "questions": len(public), "warnings": warnings}
 
@@ -324,7 +324,7 @@ def correct_exam(exam: str, grades: Optional[list[QuestionGrade]] = None, commen
     counts = ", ".join(f"{grades.count(grade)} {grade}" for grade in quiz.GRADES if grade in grades)
     course_document = objects.get_course(objects.document_course(document))
     objects.append_to_session(course_document, f"Exam {objects.link('exam', exam, document.path)} corrected : {counts} (mean {mean}/5)")
-    plans.render(course_document)
+    dashboards.render_course(course_document)
     vault.write(course_document)
     return {
         "grades": grades,

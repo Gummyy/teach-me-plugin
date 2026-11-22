@@ -1,19 +1,26 @@
 """The plan of a course : the sequence of its classes and exams, thought through when the course is created.
 
-The plan lives in the frontmatter of course.md (`plan`), and is shown as a table in its "## Plan"
-section, with links to the documents of its steps, which don't exist until the step is done. Each step
-gets its slug when it is planned, so that save_class and create_exam create exactly the file the table
-links to. The progress of a step is never stored : it comes from the documents that exist.
+Every step of the plan is a note of its own, created when the step is planned, in the folder of its
+kind : `classes/class-<slug>.md`, `exams/quiz-<slug>.md` or `exams/exercise-<slug>.md`. Its properties
+hold the plan, so that an Obsidian base shows it (see `dashboards.py`) :
 
-    {"slug", "kind" : class | quiz | project, "title", "description", "skills", "importance" : core | optional,
-     "resources" (optional), "added" (true for a document created outside the plan)}
+    type : class | quiz | exercise    course : [[course-<course>]]    order : 1, 2, ...
+    title, description, skills (links), importance : core | optional, status,
+    added : true (a document created outside the plan), suggested_resources (titles and URLs)
+
+A planned step has the status `planned` and a placeholder body. save_class and create_exam fill the
+note of their step : a class is then `done`, an exam `assigned`, `filled` and `corrected`. A step
+removed from the plan is deleted when nothing was written in it, and `dropped` otherwise.
+
+Inside the tools, a step is a dict : {"slug", "kind" : class | quiz | project, "title", "description",
+"skills", "importance", "resources", "added"}.
 """
 
 from __future__ import annotations
 
 from typing import Optional
 
-from teach_me.database import objects, vault
+from teach_me.database import blocks, objects, vault
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 
@@ -21,12 +28,16 @@ STEP_KINDS = ("class", "quiz", "project")
 IMPORTANCES = ("core", "optional")
 COURSE_STATUSES = ("active", "finished", "abandoned")
 PROGRESS = ("planned", "in progress", "done")
-"""planned : no document yet. in progress : an exam waiting for answers or for its correction. done : a class saved, an exam corrected."""
+"""planned : nothing done yet. in progress : an exam waiting for answers or for its correction. done : a class saved, an exam corrected."""
 CLASSES_PER_EXAM = 3
 """The skill asks for at least one exam every 3 classes."""
 NEXT_STEPS = 3
 """The number of steps to come returned with the state of a course."""
-ICONS = {"class": "📖 class", "quiz": "❓ quiz", "project": "🛠️ project", "planned": "⏳ planned", "in progress": "✍️ in progress", "done": "✅ done"}
+PLANNED, DROPPED = "planned", "dropped"
+NOTE_TYPES = {"class": "class", "quiz": objects.EXAM_NOTE_TYPES["quiz"], "project": objects.EXAM_NOTE_TYPES["project"]}
+"""The `type` of the note of each kind of step."""
+KINDS = {note_type: kind for kind, note_type in NOTE_TYPES.items()}
+PLACEHOLDER_BLOCK = "planned"
 
 
 # --------------------------------------------------------------------------- #
@@ -34,38 +45,61 @@ ICONS = {"class": "📖 class", "quiz": "❓ quiz", "project": "🛠️ project"
 # --------------------------------------------------------------------------- #
 
 
-def _legacy_plan(course: Document) -> list[dict]:
-    """The plan of a course created before the plans : one step per document of its old "## Content" section."""
-    steps = []
-    for stem, alias in objects.legacy_content(course.body):
-        kind = next((kind for kind in STEP_KINDS if stem.startswith(objects.step_prefix(kind))), None)
-        if kind is None:
-            continue
-        step = {"slug": stem[len(objects.step_prefix(kind)):], "kind": kind, "title": alias or stem, "description": "", "skills": [], "importance": "core"}
-        path = objects.step_file(objects.course_slug(course), step)
-        if path.is_file():
+def step_notes(course: str, include_dropped: bool = False) -> list[Document]:
+    """The notes of the steps of a course, in the order of the plan."""
+    notes = []
+    for folder in ("classes", "exams"):
+        for path in (objects.courses_dir() / course / folder).glob("*.md"):
             document = vault.read(path)
-            step["title"] = str(document.metadata.get("title") or step["title"])
-            step["description"] = str(document.metadata.get("summary") or "")
-            step["skills"] = [objects.unlink(item.get("skill", "")) for item in document.metadata.get("skills") or [] if isinstance(item, dict)]
-        steps.append(step)
-    return steps
+            if document.metadata.get("type") not in KINDS:
+                continue
+            if document.metadata.get("status") == DROPPED and not include_dropped:
+                continue
+            notes.append(document)
+    notes.sort(key=lambda document: (_order(document), document.path.stem))
+    return notes
+
+
+def _order(document: Document) -> float:
+    value = document.metadata.get("order")
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else float("inf")
+
+
+def as_step(document: Document) -> dict:
+    metadata = document.metadata
+    step = {
+        "slug": objects.slug(document),
+        "kind": KINDS[metadata["type"]],
+        "title": str(metadata.get("title") or objects.slug(document)),
+        "description": str(metadata.get("description") or ""),
+        "skills": [objects.unlink(skill) for skill in metadata.get("skills") or []],
+        "importance": metadata.get("importance") if metadata.get("importance") in IMPORTANCES else "core",
+    }
+    if metadata.get("suggested_resources"):
+        step["resources"] = list(metadata["suggested_resources"])
+    if metadata.get("added"):
+        step["added"] = True
+    return step
 
 
 def course_plan(course: Document) -> list[dict]:
-    """The steps of the plan of a course, in order. A course created before the plans gets one from its documents."""
-    if "plan" not in course.metadata:
-        return _legacy_plan(course)
-    return [step for step in course.metadata.get("plan") or [] if isinstance(step, dict) and step.get("kind") in STEP_KINDS]
+    """The steps of the plan of a course, in order."""
+    return [as_step(document) for document in step_notes(objects.course_slug(course))]
+
+
+def status_progress(kind: str, status: Optional[str]) -> str:
+    if status in (PLANNED, None):
+        return "planned"
+    if kind == "class":
+        return "done"
+    return "done" if status == "corrected" else "in progress"
 
 
 def progress(course: str, step: dict) -> str:
     path = objects.step_file(course, step)
     if not path.is_file():
         return "planned"
-    if step["kind"] == "class":
-        return "done"
-    return "done" if vault.read(path).metadata.get("status") == "corrected" else "in progress"
+    return status_progress(step["kind"], vault.read(path).metadata.get("status"))
 
 
 def with_progress(course: str, steps: list[dict]) -> list[dict]:
@@ -87,15 +121,12 @@ def find_step(course: Document, slug: str) -> dict:
 
 
 def reserved_slugs(folder: str) -> set[str]:
-    """The slugs taken in a folder ("classes" or "exams") : by a document of any course, or by a step of any plan."""
-    taken = {objects.slug(path) for path in objects.courses_dir().glob(f"*/{folder}/*.md")}
-    for course in objects.iter_courses():
-        taken.update(step["slug"] for step in course_plan(course) if objects.STEP_FOLDERS[step["kind"]] == folder)
-    return taken
+    """The slugs taken in a folder ("classes" or "exams") by a note of any course."""
+    return {objects.slug(path) for path in objects.courses_dir().glob(f"*/{folder}/*.md")}
 
 
 def new_slug(kind: str, title: str, taken: Optional[set[str]] = None) -> str:
-    """A slug for a new step, unique among the documents and the steps of every course. Adds it to `taken`."""
+    """A slug for a new step, unique among the steps of every course. Adds it to `taken`."""
     folder = objects.STEP_FOLDERS[kind]
     taken = reserved_slugs(folder) if taken is None else taken
     slug = vault.unique_slug(vault.slugify(title), lambda candidate: candidate in taken)
@@ -171,13 +202,100 @@ def insert(steps: list[dict], new: list[dict], after: Optional[str]) -> list[dic
     return [*steps[:index], *new, *steps[index:]]
 
 
+# --------------------------------------------------------------------------- #
+# Writing the notes of the steps
+# --------------------------------------------------------------------------- #
+
+
+def placeholder(kind: str) -> str:
+    """The body of the note of a planned step, until the step comes. What it is about is in its properties."""
+    what = {"class": "This class", "quiz": "This quiz", "project": "This project exercise"}[kind]
+    content = f"> [!todo] Planned\n> {what} comes later in the course : its content will be written here when its turn comes. What it covers is in its properties."
+    return blocks.ensure_notes(blocks.render(PLACEHOLDER_BLOCK, content))
+
+
+def _properties(step: dict, order: int) -> dict:
+    """The properties of the plan, as written in the note of a step."""
+    properties = {
+        "title": step["title"],
+        "description": step.get("description") or "",
+        "order": order,
+        "importance": step["importance"],
+        "skills": [f"[[{objects.PREFIXES['skill']}{skill}]]" for skill in step["skills"]],
+    }
+    if step.get("resources"):
+        properties["suggested_resources"] = list(step["resources"])
+    if step.get("added"):
+        properties["added"] = True
+    return properties
+
+
+def write_plan(course: str, steps: list[dict]) -> None:
+    """Writes the plan : the notes of new steps are created as planned, the others get their new properties.
+
+    The steps left out of `steps` are removed from the plan : deleted when nothing was written in them, dropped otherwise.
+    """
+    link = objects.course_link(course)
+    kept = set()
+    for order, step in enumerate(steps, 1):
+        path = objects.step_file(course, step)
+        kept.add(path)
+        properties = _properties(step, order)
+        if not path.is_file():
+            moment = vault.format_time(vault.now())
+            metadata = {"type": NOTE_TYPES[step["kind"]], "course": link, **properties, "status": PLANNED, "created_at": moment, "updated_at": moment}
+            vault.write(Document(path, metadata, placeholder(step["kind"])))
+            continue
+        document = vault.read(path)
+        metadata = {key: value for key, value in document.metadata.items() if key not in ("suggested_resources", "added")}
+        merged = {"type": NOTE_TYPES[step["kind"]], "course": link, **metadata, **properties}
+        if merged.get("status") == DROPPED:
+            merged["status"] = PLANNED
+        if merged != document.metadata:
+            merged["updated_at"] = vault.format_time(vault.now())
+            document.metadata = merged
+            vault.write(document)
+    for document in step_notes(course):
+        if document.path not in kept:
+            remove(document)
+
+
+def remove(document: Document) -> None:
+    """Removes a planned step from the plan : its note is deleted, unless the student wrote in it."""
+    untouched = document.body.strip() == placeholder(as_step(document)["kind"]).strip()
+    if untouched:
+        document.path.unlink()
+        return
+    document.metadata["status"] = DROPPED
+    document.metadata["updated_at"] = vault.format_time(vault.now())
+    vault.write(document)
+
+
+def fill(path, metadata: dict, content: str) -> Document:
+    """Writes the document of a step in its note : the planned placeholder gives way to the content,
+    and what the student wrote in the note in the meantime goes to its "My notes" section."""
+    document = vault.read(path)
+    rest = blocks.remove(document.body, PLACEHOLDER_BLOCK)
+    notes = blocks.notes(rest)
+    bounds = blocks.notes_bounds(rest)
+    outside = (rest[:bounds[0]] + rest[bounds[1]:]).strip() if bounds else rest.strip()
+    mine = "\n\n".join(text for text in (outside, notes) if text)
+    body = content.strip("\n")
+    if mine:
+        body = f"{body}\n\n{blocks.NOTES_HEADING}\n\n{mine}"
+    document.metadata = {**document.metadata, **metadata}
+    document.body = body
+    vault.write(document)
+    return document
+
+
 def add_unplanned(course: Document, kind: str, title: str, description: str, skills: list[str]) -> tuple[dict, str]:
     """Adds a document created outside the plan to the plan, after the last step started. Returns the step and a warning."""
     course_slug = objects.course_slug(course)
     steps = course_plan(course)
     step = {"slug": new_slug(kind, title), "kind": kind, "title": title, "description": description, "skills": skills, "importance": "optional", "added": True}
-    started = [step["slug"] for step in steps if progress(course_slug, step) != "planned"]
-    course.metadata["plan"] = insert(steps, [step], started[-1] if started else "")
+    started = [other["slug"] for other in steps if progress(course_slug, other) != "planned"]
+    write_plan(course_slug, insert(steps, [step], started[-1] if started else ""))
     waiting = [f"{s['slug']} ('{s['title']}')" for s in steps if s["kind"] == kind and progress(course_slug, s) == "planned"]
     warning = f"'{title}' wasn't in the plan : it was added to it after the last step done."
     if waiting:
@@ -193,45 +311,3 @@ def planned_step(course: Document, slug: str, kind: str) -> dict:
     if progress(objects.course_slug(course), step) != "planned":
         raise ToolError(f"The step '{slug}' already has its document ({vault.relative(objects.step_file(objects.course_slug(course), step))}). Leave `planned` out for a new one.")
     return step
-
-
-# --------------------------------------------------------------------------- #
-# The "## Plan" table
-# --------------------------------------------------------------------------- #
-
-
-def _cell(value) -> str:
-    return " ".join(str(value if value is not None else "").replace("|", "\\|").split())
-
-
-def _link(stem: str, title: str) -> str:
-    """A link to a note that may not exist yet. Inside a table, the | of the alias must be escaped."""
-    alias = " ".join(title.replace("|", "/").replace("[", "(").replace("]", ")").split())
-    return f"[[{stem}\\|{alias}]]"
-
-
-def render(course: Document) -> None:
-    """Writes the plan of a course (migrating an old "## Content" section) as the "## Plan" table of its body. The caller must write the document."""
-    slug = objects.course_slug(course)
-    steps = course_plan(course)
-    course.metadata["plan"] = steps
-    lines = [objects.PLAN_HEADING, ""]
-    if steps:
-        lines += ["| # | Step | Type | Description | Skills | Importance | Progress |", "| --- | --- | --- | --- | --- | --- | --- |"]
-        for number, step in enumerate(steps, 1):
-            importance = step["importance"] + (" · ➕ added" if step.get("added") else "")
-            lines.append(
-                f"| {number} | {_link(objects.step_prefix(step['kind']) + step['slug'], step['title'])} | {ICONS[step['kind']]} | "
-                f"{_cell(step.get('description'))} | {_cell(', '.join(step['skills']))} | {importance} | {ICONS[progress(slug, step)]} |"
-            )
-    else:
-        lines.append("Nothing planned yet.")
-    table = "\n".join(lines)
-    body = course.body
-    bounds = objects.section(body, objects.PLAN_HEADING) or objects.section(body, objects.CONTENT_HEADING)
-    if bounds is None:
-        course.body = f"{table}\n\n{body.lstrip()}".rstrip() + "\n"
-    else:
-        start, end = bounds
-        rest = body[end:].lstrip("\n")
-        course.body = f"{body[:start]}{table}\n" + (f"\n{rest}" if rest else "")

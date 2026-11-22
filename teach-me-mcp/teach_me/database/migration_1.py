@@ -6,11 +6,18 @@ order, each one on the notes as the previous steps left them.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
-from teach_me.database import objects, quiz, vault
+from teach_me.database import dashboards, objects, quiz, vault
+from teach_me.database import plan as plans
 from teach_me.database.vault import Document
+
+CONTENT_HEADING = "## Content"
+"""The section that listed the classes and exams of a course before the plans (teach-me 0.1)."""
+PLAN_HEADING = "## Plan"
+"""The section that showed the plan of a course as a table (teach-me 0.2)."""
 
 
 def _front(metadata: dict, first: dict) -> dict:
@@ -97,7 +104,76 @@ def skill_notes() -> list[str]:
     return changed
 
 
-STEPS: list[Callable[[], list[str]]] = [add_types, flatten_exams, skill_notes]
+def _section(body: str, heading: str) -> Optional[tuple[int, int]]:
+    """Start and end of a "## " section of a body, heading included, or None."""
+    match = re.search(rf"^{re.escape(heading)}[ \t]*$", body, re.MULTILINE)
+    if match is None:
+        return None
+    following = re.search(r"^## ", body[match.end():], re.MULTILINE)
+    return match.start(), match.end() + following.start() if following else len(body)
+
+
+def _legacy_plan(course: Document) -> list[dict]:
+    """The plan of a course created before the plans : one step per note linked in its "## Content" section."""
+    bounds = _section(course.body, CONTENT_HEADING)
+    if bounds is None:
+        return []
+    links = re.findall(r"\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]", course.body[bounds[0]:bounds[1]])
+    steps = []
+    for stem, alias in dict.fromkeys((stem.strip(), alias.strip() or None) for stem, alias in links):
+        kind = next((kind for kind in plans.STEP_KINDS if stem.startswith(objects.step_prefix(kind))), None)
+        if kind is not None:
+            steps.append({"slug": stem[len(objects.step_prefix(kind)):], "kind": kind, "title": alias or stem, "description": "", "skills": [], "importance": "core"})
+    return steps
+
+
+def plan_notes() -> list[str]:
+    """Each step of the plan of a course becomes a note of its own, and the course note shows the plan with a base instead of a table."""
+    changed = []
+    for course in objects.iter_courses():
+        slug = objects.course_slug(course)
+        if "plan" in course.metadata:
+            steps = [dict(step) for step in course.metadata.get("plan") or [] if isinstance(step, dict) and step.get("kind") in plans.STEP_KINDS]
+        else:
+            steps = _legacy_plan(course)
+        known = {objects.step_file(slug, step) for step in steps}
+        for folder, kinds in (("classes", ("class",)), ("exams", ("quiz", "project"))):
+            for path in sorted((objects.courses_dir() / slug / folder).glob("*.md")):
+                document = vault.read(path)
+                if path in known or document.metadata.get("order") is not None:
+                    continue
+                kind = "class" if folder == "classes" else objects.exam_type(document)
+                steps.append({"slug": objects.slug(path), "kind": kind, "title": str(document.metadata.get("title") or path.stem), "description": "", "skills": [], "importance": "optional", "added": True})
+        for step in steps:
+            path = objects.step_file(slug, step)
+            if not path.is_file():
+                continue
+            document = vault.read(path)
+            metadata = document.metadata
+            summary = metadata.pop("summary", None)
+            if summary and not step.get("description"):
+                step["description"] = summary
+            if metadata.get("title"):
+                step["title"] = str(metadata["title"])
+            if step["kind"] != "class" and metadata.get("skills"):
+                step["skills"] = [objects.unlink(skill) for skill in metadata["skills"]]
+            metadata.setdefault("status", "done" if step["kind"] == "class" else "assigned")
+            metadata.setdefault("started_at", metadata.get("created_at"))
+            vault.write(document)
+        plans.write_plan(slug, steps)
+        course = objects.get_course(slug)
+        course.metadata.pop("plan", None)
+        for heading in (PLAN_HEADING, CONTENT_HEADING):
+            bounds = _section(course.body, heading)
+            if bounds is not None:
+                course.body = (course.body[:bounds[0]] + course.body[bounds[1]:]).strip("\n")
+        dashboards.render_course(course)
+        vault.write(course)
+        changed.append(f"{vault.relative(course.path)} : {len(steps)} steps of the plan, each in its own note")
+    return changed
+
+
+STEPS: list[Callable[[], list[str]]] = [add_types, flatten_exams, skill_notes, plan_notes]
 
 
 def run() -> list[str]:

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from teach_me.database import objects, quiz, vault
+from teach_me.database import dashboards, objects, quiz, vault
 from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
@@ -92,7 +92,7 @@ def create_course(
         subject (str): 2-3 sentences about what the user wants to learn, mixing specific and general subjects
         starting_level (str): 2-3 sentences about the skills the user already has for this course
         skills (list[str]): The slugs of ALL the skills the course will evaluate, as returned by create_skills, in the order of the progression. Exams can only evaluate these skills.
-        plan (list[PlannedStep]): The plan of the whole course, in order : every class and exam you foresee, from the first class to the last project exam. It is shown to the student as a table in the course note. Change it later with edit_course.
+        plan (list[PlannedStep]): The plan of the whole course, in order : every class and exam you foresee, from the first class to the last project exam. Each step gets its note right away, as planned, and the course note shows the plan as a table. Change it later with edit_course.
         projects (Optional[list[str]]): The slugs of the projects this course builds towards. Defaults to None.
         name (Optional[str]): A short name for the course (3-5 words), used for its folder. Defaults to the first words of the subject.
 
@@ -134,12 +134,12 @@ def create_course(
             "projects": project_links,
             "skills": skill_links,
             "resources": [],
-            "plan": steps,
         },
         f"## {vault.format_session(moment)}\n\n- Course created",
     )
-    plans.render(document)
+    dashboards.render_course(document)
     vault.write(document)
+    plans.write_plan(slug, steps)
     return {"slug": slug, "plan": plans.with_progress(slug, steps), "warnings": plans.warnings(steps, course_skills)}
 
 
@@ -257,6 +257,8 @@ def edit_course(
         if step is None:
             raise ToolError(f"Update {number} of `update_steps` : unknown step '{slug}'. Steps : {', '.join(other['slug'] for other in steps) or 'none'}.")
         changes = {key: update[key] for key in ("title", "description", "skills", "importance", "resources") if key in update}
+        if "skills" in changes and step["kind"] != "class" and plans.progress(course, step) != "planned":
+            raise ToolError(f"Update {number} of `update_steps` : the exam '{slug}' was already given, its skills are the ones its questions evaluate.")
         cleaned = plans.clean_step({**step, **changes}, course_skills, f"Update {number} of `update_steps`")
         step.update(cleaned)
         if "resources" in changes and not cleaned.get("resources"):
@@ -271,11 +273,11 @@ def edit_course(
         raise ToolError("`insert_after` places the steps of `add_steps` : give `add_steps` too, or move a step with `move_after` in update_steps.")
     for step in steps:
         plans.check_step_skills(step["skills"], course_skills, f"The step '{step['slug']}'")
-    metadata["plan"] = steps
 
     objects.current_session(document)
-    plans.render(document)
+    dashboards.render_course(document)
     vault.write(document)
+    plans.write_plan(course, steps)
     return {
         "slug": course,
         "name": metadata.get("name"),
