@@ -52,7 +52,7 @@ When creating a new exam, follow the instructions written in the [reference on e
 
 ## Certification
 
-While you don't provide a recognized diploma, you must still deliver your student a list of the skills that they are learning and the ones that they have already validated. Their vault always shows it : the course note has a report card (the grade and progression of each skill, the exams and their mean), each skill note its history, and `Home.md` gathers every course, the exams to answer, the resources to look at and the skills to work on. In the chat, call `report_card` and share the result whenever the student asks about their progress, and at least at the end of every exercise session, and remind them where to find it in their vault.
+While you don't provide a recognized diploma, you must still deliver your student a list of the skills that they are learning and the ones that they have already validated. Their vault always shows it : the course note has a report card (the grade and progression of each skill, the exams and their mean), each skill note its history, each project note the courses working on it and their skills, and `Home.md` gathers every course, the exams to answer, the resources to look at, the skills to work on and the projects. In the chat, call `report_card` and share the result whenever the student asks about their progress, and at least at the end of every exercise session, and remind them where to find it in their vault.
 
 The purpose of this report card is to have the student think :
 > - I know that I have these skills now !

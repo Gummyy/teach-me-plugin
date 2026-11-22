@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Union
 
-from teach_me.database import blocks, quiz, vault
+from teach_me.database import blocks, dashboards, quiz, vault
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 
@@ -519,3 +519,36 @@ def read_known_skills(metadata: dict) -> list[dict]:
 
 def write_known_skills(skills: list[dict]) -> list[str]:
     return [f"{skill['name']}{SKILL_SEPARATOR}{skill['description']}" if skill.get("description") else skill["name"] for skill in skills]
+
+
+PROGRESS_HEADING = "## Progress"
+
+
+def split_project(body: str) -> tuple[str, str, str]:
+    """A project note holds its views (generated), its description, the "## Progress" log, then the student's "My notes" section.
+    Returns the description, the log and the "My notes" section. A version of the views the student edited moves to "My notes" first."""
+    body = blocks.replace(body, dashboards.PROJECT_BLOCK, dashboards.PROJECT_DASHBOARD, vault.format_session(vault.now()), first=True)
+    body = blocks.remove(body, dashboards.PROJECT_BLOCK)
+    bounds = blocks.notes_bounds(body)
+    notes = body[bounds[0]:bounds[1]].strip() if bounds else ""
+    if bounds:
+        body = body[:bounds[0]] + body[bounds[1]:]
+    description, _, progress = body.partition(PROGRESS_HEADING)
+    return description.strip(), progress.strip(), notes
+
+
+def write_project(document: Document, description: str, log: str, notes: str) -> None:
+    """Writes a project note : its views, then its description, its progress log and "My notes"."""
+    body = description + (f"\n\n{PROGRESS_HEADING}\n\n{log}" if log else "") + (f"\n\n{notes}" if notes else "")
+    document.body = blocks.ensure_notes(body.strip("\n"))
+    dashboards.render_project(document)
+    vault.write(document)
+
+
+def render_project(project: str) -> None:
+    """Writes the views of a project note again, when the student broke them."""
+    document = get_project(project)
+    before = document.body
+    dashboards.render_project(document)
+    if document.body != before:
+        vault.write(document)

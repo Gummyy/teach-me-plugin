@@ -30,4 +30,4 @@ Types : `note`, `info`, `tip`, `success`, `question`, `warning`, `failure`, `dan
 
 ## What the tools generate in `teach-me`
 
-Some parts of the notes are written by the tools between `%% teach-me:<name> start %%` and `%% teach-me:<name> end %%` lines : the views of `Home.md` and of the course notes, the history of a skill. Don't copy them into a content. The student writes in the `## ✏️ My notes` section of a note : read it when it matters, never rewrite it.
+Some parts of the notes are written by the tools between `%% teach-me:<name> start %%` and `%% teach-me:<name> end %%` lines : the views of `Home.md`, of the course notes and of the project notes, the history of a skill. Don't copy them into a content. The student writes in the `## ✏️ My notes` section of a note : read it when it matters, never rewrite it.

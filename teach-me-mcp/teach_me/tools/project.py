@@ -8,17 +8,8 @@ from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.users import edit_text
 
-PROGRESS_HEADING = "## Progress"
-
-
-def _split_project(body: str) -> tuple[str, str]:
-    """A project file holds its description, then the "## Progress" log."""
-    description, _, progress = body.partition(PROGRESS_HEADING)
-    return description.strip(), progress.strip()
-
-
 def _summary(document: Document) -> dict:
-    description, progress = _split_project(document.body)
+    description, progress, _ = objects.split_project(document.body)
     entries = [line[2:] for line in progress.splitlines() if line.startswith("- ")]
     return {
         "slug": objects.slug(document),
@@ -50,9 +41,9 @@ def create_project(user: str, name: str, description: str) -> str:
     document = Document(
         objects.project_file(slug),
         {"type": "project", "name": name.strip(), "user": objects.link("user", user, objects.user_file(user)), "created_at": vault.format_time(vault.now())},
-        (description or "").strip(),
+        "",
     )
-    vault.write(document)
+    objects.write_project(document, (description or "").strip(), "", "")
     return slug
 
 
@@ -92,7 +83,7 @@ def update_project(
     document = objects.get_project(project)
     if progress is None and name is None and description is None and add_to_description is None:
         raise ToolError("Nothing to update : give a `progress` entry, a new `name`, a new `description` or `add_to_description`.")
-    current_description, log = _split_project(document.body)
+    current_description, log, notes = objects.split_project(document.body)
     replaced = {}
     if name is not None:
         if not name.strip():
@@ -107,6 +98,5 @@ def update_project(
         entry = f"- {vault.now():%Y-%m-%d} : {' '.join(progress.split())}"
         log = f"{log}\n{entry}".strip()
     document.metadata["updated_at"] = vault.format_time(vault.now())
-    document.body = current_description + (f"\n\n{PROGRESS_HEADING}\n\n{log}" if log else "")
-    vault.write(document)
+    objects.write_project(document, current_description, log, notes)
     return {**_summary(document), "replaced": replaced}

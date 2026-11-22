@@ -52,6 +52,8 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
     objects.append_to_session(document, f"Session in the {interface}")
     dashboards.render_course(document)  # the views, written again if the student broke them
     vault.write(document)
+    for project in document.metadata.get("projects") or []:
+        objects.render_project(objects.unlink(project))
     state = get_course_state(course)
     steps = [" ".join(state["progress"]["advice"]) or "Continue the course where the last session stopped."]
     upcoming = state["plan"]["next_steps"]

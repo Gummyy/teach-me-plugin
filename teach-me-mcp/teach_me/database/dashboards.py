@@ -2,11 +2,14 @@
 
     bases/course.base     the views of a course, embedded in its note : `this` is the course note,
                           its folder holds the notes of its steps and resources, and it links to its skills and projects
+    bases/project.base    the views of a project, embedded in its note : `this` is the project note,
+                          the courses linking to it, and the skills of these courses
     bases/home.base       the views of Home.md, across the courses : exams to answer, last steps,
-                          resources to look at, skills to work on
+                          resources to look at, skills to work on, projects
 
 A course note starts with a generated block embedding these views (see `blocks.py`), then the
-student's "My notes" section, then the session log.
+student's "My notes" section, then the session log. A project note starts with its own block, then
+its description, its progress log and the "My notes" section.
 
 The bases are written when they are missing. A migration rewrites them when a new version changes them.
 """
@@ -202,6 +205,74 @@ views:
       - step
 """
 
+PROJECT_BASE = """# Written by teach-me : the views of a project, embedded in its note with ![[project.base#<view>]].
+# `this` is the project note : its courses link to it, and their skills are found through the links to each skill.
+# `file.backlinks` is computed when the note opens : a course linked to the project during the session shows on the next opening.
+formulas:
+  course: 'file.asLink(name)'
+  skill: 'file.asLink(name)'
+  courses: 'file.backlinks.filter(value.asFile().properties.type == "course" && value.asFile().hasLink(this.file))'
+summaries:
+  Evaluated mean: 'values.filter(value).mean().round(2)'
+properties:
+  formula.course:
+    displayName: Course
+  formula.skill:
+    displayName: Skill
+  formula.courses:
+    displayName: Courses
+  note.status:
+    displayName: Status
+  note.subject:
+    displayName: Subject
+  note.updated_at:
+    displayName: Last activity
+  note.description:
+    displayName: Description
+  note.grade:
+    displayName: Grade
+  note.score:
+    displayName: Score
+  note.progression:
+    displayName: Progression
+  note.last_evaluated:
+    displayName: Last evaluated
+views:
+  - type: table
+    name: Courses
+    filters:
+      and:
+        - 'type == "course"'
+        - 'file.hasLink(this.file)'
+    sort:
+      - property: updated_at
+        direction: DESC
+    order:
+      - formula.course
+      - status
+      - subject
+      - updated_at
+  - type: table
+    name: Skills
+    filters:
+      and:
+        - 'type == "skill"'
+        - 'file.backlinks.filter(value.asFile().properties.type == "course" && value.asFile().hasLink(this.file)).length > 0'
+    sort:
+      - property: file.name
+        direction: ASC
+    order:
+      - formula.skill
+      - description
+      - formula.courses
+      - grade
+      - score
+      - progression
+      - last_evaluated
+    summaries:
+      score: Evaluated mean
+"""
+
 HOME_BASE = """# Written by teach-me : the views of Home.md, across all the courses of the vault.
 formulas:
   name: 'if(title, file.asLink(title), file.asLink(name))'
@@ -297,9 +368,18 @@ views:
       - grade
       - score
       - progression
+  - type: table
+    name: Projects
+    filters: 'type == "project"'
+    sort:
+      - property: updated_at
+        direction: DESC
+    order:
+      - formula.name
+      - updated_at
 """
 
-BASES = {"course.base": COURSE_BASE, "home.base": HOME_BASE}
+BASES = {"course.base": COURSE_BASE, "project.base": PROJECT_BASE, "home.base": HOME_BASE}
 
 COURSE_DASHBOARD = """## 📍 Where you are
 
@@ -332,6 +412,20 @@ Drag a resource to *seen* once you had a look, and write what you thought of it 
 ![[course.base#Resources]]"""
 """The views at the top of a course note."""
 
+PROJECT_BLOCK = "dashboard"
+PROJECT_DASHBOARD = """## 📚 Courses
+
+The courses that work on this project.
+
+![[project.base#Courses]]
+
+## 🎯 Skills
+
+What these courses teach, and where you stand.
+
+![[project.base#Skills]]"""
+"""The views at the top of a project note."""
+
 HOME_BLOCK = "home"
 HOME_DASHBOARD = """# 🏠 Home
 
@@ -353,7 +447,11 @@ HOME_DASHBOARD = """# 🏠 Home
 
 ## Skills to work on
 
-![[home.base#Skills to work on]]"""
+![[home.base#Skills to work on]]
+
+## Projects
+
+![[home.base#Projects]]"""
 """The views of Home.md, the entry point of the vault."""
 
 
@@ -394,3 +492,9 @@ def render_course(course: Document) -> None:
     ensure_bases()
     body = blocks.replace(course.body, COURSE_BLOCK, COURSE_DASHBOARD, vault.format_session(vault.now()), first=True)
     course.body = blocks.ensure_notes(body)
+
+
+def render_project(project: Document) -> None:
+    """Writes the views at the top of a project note. The caller must write the document."""
+    ensure_bases()
+    project.body = blocks.replace(project.body, PROJECT_BLOCK, PROJECT_DASHBOARD, vault.format_session(vault.now()), first=True)

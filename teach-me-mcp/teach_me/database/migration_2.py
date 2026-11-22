@@ -1,4 +1,5 @@
-"""Migration 2 : the views of version 1 fixed, now that they were checked in Obsidian, and the user notes flat.
+"""Migration 2 : the views of version 1 fixed, now that they were checked in Obsidian, the user notes flat,
+and the project notes showing their courses and skills.
 
 Each step works on every note of the vault and returns one line per note it changed. The steps run in
 order, each one on the notes as the previous steps left them.
@@ -14,7 +15,13 @@ from teach_me.database import dashboards, objects, vault
 def views() -> list[str]:
     """The bases are written again : the Plan view of version 1 didn't parse, and some columns had no name.
     A base the student changed in Obsidian (a sort, a column) is overwritten too : the backup keeps their version."""
-    return [f"{path} : written again" for path in dashboards.ensure_bases(force=True)]
+    changed = [f"{path} : written again" for path in dashboards.ensure_bases(force=True)]
+    if dashboards.home_file().is_file():
+        before = dashboards.home_file().read_text(encoding="utf-8")
+        dashboards.ensure_home()
+        if dashboards.home_file().read_text(encoding="utf-8") != before:
+            changed.append("Home.md : views")
+    return changed
 
 
 def flat_users() -> list[str]:
@@ -40,7 +47,18 @@ def flat_users() -> list[str]:
     return changed
 
 
-STEPS: list[Callable[[], list[str]]] = [views, flat_users]
+def project_notes() -> list[str]:
+    """A project note starts with the views of its courses and their skills, and gets a "My notes" section."""
+    changed = []
+    for document in objects.iter_projects(None):
+        before = document.body
+        objects.write_project(document, *objects.split_project(document.body))
+        if document.body != before:
+            changed.append(f"{vault.relative(document.path)} : views of its courses and skills")
+    return changed
+
+
+STEPS: list[Callable[[], list[str]]] = [views, flat_users, project_notes]
 
 
 def run() -> list[str]:

@@ -7,7 +7,7 @@ import yaml
 
 from teach_me.database import dashboards, objects
 from teach_me.database import vault as vault_io
-from teach_me.tools import start_session
+from teach_me.tools import start_session, update_project
 
 
 def _check_filter(node, where: str) -> None:
@@ -55,7 +55,10 @@ def test_the_bases_are_valid(name):
         assert key.split(".")[0] in ("note", "formula", "file"), key  # a bare key is ignored by Obsidian
 
 
-@pytest.mark.parametrize("dashboard, base", [(dashboards.COURSE_DASHBOARD, "course.base"), (dashboards.HOME_DASHBOARD, "home.base")])
+@pytest.mark.parametrize(
+    "dashboard, base",
+    [(dashboards.COURSE_DASHBOARD, "course.base"), (dashboards.PROJECT_DASHBOARD, "project.base"), (dashboards.HOME_DASHBOARD, "home.base")],
+)
 def test_the_embedded_views_exist(dashboard, base):
     views = {view["name"] for view in yaml.safe_load(dashboards.BASES[base])["views"]}
     embedded = re.findall(r"!\[\[([^#\]]+)#([^\]]+)\]\]", dashboard)
@@ -73,3 +76,24 @@ def test_the_vault_gets_its_views(course, vault):
     body = objects.get_course(course).body
     for view in ("Last steps", "Next steps", "Plan", "Skills", "Exams", "Projects", "Resources"):
         assert f"![[course.base#{view}]]" in body
+
+
+def test_a_project_note_shows_its_courses_and_skills(course, vault):
+    path = vault / "projects" / "project-pet-classifier.md"
+    body = vault_io.read(path).body
+    assert body.startswith("%% teach-me:dashboard start %%") and "![[project.base#Courses]]" in body and "![[project.base#Skills]]" in body
+    assert body.index("Classify the pictures") < body.index("## ✏️ My notes")
+    document = vault_io.read(path)
+    document.body = document.body.replace("## ✏️ My notes", "## ✏️ My notes\n\nAsk my sister for more rabbit pictures.").replace("![[project.base#Skills]]", "")
+    vault_io.write(document)
+    project = update_project("pet-classifier", progress="Dataset collected")
+    assert project["description"] == "Classify the pictures of my cats and dogs."
+    body = vault_io.read(path).body
+    assert body.index("Classify the pictures") < body.index("## Progress") < body.index("## ✏️ My notes") < body.index("Ask my sister")
+    assert body.count("![[project.base#Skills]]") == 1  # written again, the broken version moved to "My notes"
+    assert "> [!quote]- Your version of the dashboard" in body
+    document = vault_io.read(path)
+    document.body = document.body.replace("![[project.base#Courses]]", "")
+    vault_io.write(document)
+    start_session("app", user="alice", course=course)
+    assert "![[project.base#Courses]]" in vault_io.read(path).body

@@ -2,7 +2,7 @@
 
 A Claude Code plugin with two skills :
 
-- `teach-me` turns Claude into a teacher who remembers you : classes, quizzes, project exercises and a report card, kept in your own Obsidian vault. Open `Home.md` in the vault to see where you are : your courses, exams to answer, resources to look at and skills to work on (Obsidian 1.9+ for the Bases views, 1.14+ for the resources board).
+- `teach-me` turns Claude into a teacher who remembers you : classes, quizzes, project exercises and a report card, kept in your own Obsidian vault. Open `Home.md` in the vault to see where you are : your courses, exams to answer, resources to look at, skills to work on and projects; each project note shows the courses and skills that work on it (Obsidian 1.9+ for the Bases views, 1.14+ for the resources board).
 - `teach-them` turns Claude into the teaching partner of a teacher : it prepares a course for a group of students (classes, active learning activities, team project deliverables, exams with detailed corrections, tips for the teacher and practical helpers), written as an Obsidian vault.
 
 | Path                       | Content                                                              |
