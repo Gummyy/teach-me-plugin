@@ -7,6 +7,7 @@ Read this when the session has no skill about Obsidian markdown : it is the synt
 - Link a note by its file name, without the folder or the `.md` : `[[skill-convolution]]`, with a display text after a `|` : `[[class-kernels|Kernels]]`.
 - Link a heading with `#` : `[[class-kernels#Padding]]`, a heading of the same note with `[[#Padding]]`.
 - Embed a note, an image or a view of a base with `!` : `![[schema.png]]`, `![[course.base#Plan]]`.
+- Embed an online content with `![](url)` : a YouTube video becomes a player (`![](https://www.youtube.com/watch?v=...)`), an image shows. A web page can't be embedded (it shows as a broken image) : link it with `[text](url)`.
 - Inside a table, escape the `|` of a link : `[[class-kernels\|Kernels]]`.
 - Link only notes that exist : the `teach-me` tools refuse a broken link, `teach-vault check` reports one.
 - In `teach-me`, link the skills a class teaches (`[[skill-convolution|convolution]]`) and the earlier classes it builds on : the student follows the links from one note to the next.

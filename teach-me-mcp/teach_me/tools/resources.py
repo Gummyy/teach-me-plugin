@@ -60,7 +60,7 @@ def share_resource(
         title (str): A short description, specific enough to find the content again (author, episode, timestamps)
         web_url (Optional[str]): The URL of an online resource. Defaults to None.
         file_path (Optional[str]): The path of a local file. Takes priority over web_url. Defaults to None.
-        description (Optional[str]): 1-2 sentences : why it is worth a look, and what to pay attention to. Defaults to None.
+        description (Optional[str]): The body of the resource note : 2-3 sentences on why it is worth a look and what to pay attention to, then the content embedded when Obsidian can show it (`![](url)` for a YouTube video or an image, `![[file]]` for a file of the vault), a markdown link otherwise. Defaults to None.
         step (Optional[str]): The slug of the step of the plan (class or exam) it goes with, when there is one. Defaults to None.
 
     Returns:
