@@ -38,6 +38,11 @@ def _create(course, questions=(SINGLE, MULTIPLE, OPEN), title="Convolution quiz"
     return create_exam(course, title, type, list(questions), **kwargs)
 
 
+def _grades(user):
+    """The grade, score and history of each skill, without the details of the evaluations."""
+    return {skill: {key: grade[key] for key in ("grade", "score", "history")} for skill, grade in objects.skill_grades(user).items()}
+
+
 def _fill(vault, path, old, new):
     file = vault / path
     file.write_text(file.read_text(encoding="utf-8").replace(old, new, 1), encoding="utf-8")
@@ -55,11 +60,10 @@ def test_create_exam_renders_the_questions_and_hides_the_solutions(course, vault
     document = vault_io.read(vault / exam["path"])
     assert document.metadata["status"] == "assigned"
     assert document.metadata["type"] == "quiz" and document.metadata["course"] == "[[course-computer-vision]]"
-    assert document.metadata["skills"] == [
-        {"skill": "[[skill-convolution|convolution]]", "grade": None, "score": None, "comment": None},
-        {"skill": "[[skill-cnn-architecture|cnn-architecture]]", "grade": None, "score": None, "comment": None},
-    ]
-    assert document.metadata["questions"][0] == {"kind": "single", "skills": ["convolution"], "options": ["Convolution", "Cross-correlation"]}
+    assert document.metadata["skills"] == ["[[skill-convolution]]", "[[skill-cnn-architecture]]"]  # flat : Obsidian's property panel and Bases read it
+    assert document.metadata["questions"] == 3 and document.metadata["mean"] is None
+    data = objects.exam_data("convolution-quiz")  # what the tools need, hidden from Obsidian
+    assert data["questions"][0] == {"kind": "single", "skills": ["convolution"], "options": ["Convolution", "Cross-correlation"]}
     assert "## ❓ Question 1 · Single choice\n*Skill : [[skill-convolution|convolution]]*" in document.body
     assert "- [ ] **B.** Cross-correlation" in document.body
     assert "## ❓ Question 3 · Open question" in document.body and "**Your answer :**" in document.body
@@ -121,9 +125,16 @@ def test_answers_written_in_the_file(course, vault):
 
     document = vault_io.read(vault / exam["path"])
     assert document.metadata["status"] == "corrected"
-    assert document.metadata["skills"][0] == {"skill": "[[skill-convolution|convolution]]", "grade": "A", "score": 4.5, "comment": "Forgot one neutral kernel"}
-    assert [q["grade"] for q in document.metadata["questions"]] == result["grades"]
+    assert document.metadata["mean"] == 4.33
+    data = objects.exam_data(exam["slug"])
+    assert data["skills"]["convolution"] == {"grade": "A", "score": 4.5, "comment": "Forgot one neutral kernel"}
+    assert [q["grade"] for q in data["questions"]] == result["grades"]
     body = document.body
+    assert "| [[skill-convolution\\|convolution]] | A | 4.5/5 | Forgot one neutral kernel |" in body
+    skill = objects.get_skill("convolution")
+    assert {key: skill.metadata[key] for key in ("grade", "score", "evaluations", "progression")} == {"grade": "A", "score": 4.5, "evaluations": 1, "progression": "A"}
+    assert skill.metadata["last_evaluated"] is not None
+    assert f"[[quiz-{exam['slug']}\\|Convolution quiz]] | [[course-computer-vision\\|Computer vision]] | A | 4.5/5 | Forgot one neutral kernel |" in skill.body
     assert body.index("## ❓ Question 1") < body.index("## ✅ Correction")  # the exam is kept, the correction comes after
     assert "Two convolutions and a dense layer." in body and "Pooling was missing." in body
     assert "> [!Tip] Question 2 : B · The answer solves the main problems" in body and "**Solution :** A, B" in body
@@ -212,7 +223,7 @@ def test_a_second_correction_never_removes_the_first_one(course, vault):
     body = vault_io.read(vault / exam["path"]).body
     assert body.count("## ✅ Correction (") == 2
     assert body.index("First correction") < body.index("After the retake")
-    assert objects.skill_grades("alice") == {"convolution": {"grade": "A", "score": 5.0, "history": ["A"]}}  # only the latest take counts
+    assert _grades("alice") == {"convolution": {"grade": "A", "score": 5.0, "history": ["A"]}}  # only the latest take counts
 
 
 def test_project_exams_weigh_twice_a_quiz(course):
@@ -220,7 +231,7 @@ def test_project_exams_weigh_twice_a_quiz(course):
     exercise = _create(course, [SINGLE], title="Exercise", type="project")["slug"]
     _correct(quiz, ["B"], GRADES[:1])  # D : 1
     _correct(exercise, ["A"], GRADES[:1])  # A : 5, twice
-    assert objects.skill_grades("alice")["convolution"] == {"grade": "B", "score": 3.67, "history": ["D", "A"]}
+    assert _grades("alice")["convolution"] == {"grade": "B", "score": 3.67, "history": ["D", "A"]}
 
 
 def test_progress_advice(course):

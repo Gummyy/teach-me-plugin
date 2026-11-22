@@ -51,15 +51,19 @@ def _question_number(value, questions: list[dict], where: str) -> int:
     return value
 
 
-def _questions(document: Document) -> list[dict]:
-    questions = document.metadata.get("questions")
-    if not questions:
+def _data(document: Document) -> dict:
+    data = objects.exam_data(objects.slug(document))
+    if not data.get("questions"):
         raise ToolError(f"The exam '{objects.slug(document)}' was created by an older version of teach-me, without structured questions : it can't be read or corrected with this tool.")
-    return questions
+    return data
+
+
+def _questions(document: Document) -> list[dict]:
+    return _data(document)["questions"]
 
 
 def _stored(question: dict) -> dict:
-    """What the exam's frontmatter keeps of a question : enough to read and grade the answers. The text is in the body."""
+    """What the exam data keeps of a question : enough to read and grade the answers. The text is in the body."""
     return {key: question[key] for key in ("kind", "skills", "options") if key in question}
 
 
@@ -171,11 +175,13 @@ def create_exam(
         {
             "created_at": moment,
             "updated_at": moment,
-            "skills": [{"skill": skill_links[skill], "grade": None, "score": None, "comment": None} for skill in skills],
-            "questions": [_stored(question) for question in public],
+            "skills": [objects.link("skill", skill, objects.skill_file(skill)) for skill in skills],
+            "questions": len(public),
+            "mean": None,
         }
     )
     vault.write(Document(path, metadata, quiz.render_exam(title, intro or "", public, skill_links)))
+    objects.write_exam_data(exam, {"questions": [_stored(question) for question in public], "skills": {}})
 
     solutions_file = _solutions_file(exam)
     solutions_file.parent.mkdir(parents=True, exist_ok=True)
@@ -274,13 +280,14 @@ def correct_exam(exam: str, grades: Optional[list[QuestionGrade]] = None, commen
     Args:
         exam (str): The slug of the exam
         grades (Optional[list[QuestionGrade]]): The grades of the questions : all of them, or the ones not graded yet with grade_questions. Defaults to None.
-        comments (Optional[dict[str, str]]): A short comment for each evaluated skill, by slug. Defaults to None.
+        comments (Optional[dict[str, str]]): A short comment for each evaluated skill, by slug, shown in the correction and in the history of the skill. Defaults to None.
 
     Returns:
-        dict: {"grades", "shares", "mean", "skills"} : the grade of each question, the share of each grade, the mean value of the exam (out of 5, to adjust the difficulty of the next exam) and the grade of each skill in this exam ({"grade", "score"}). A question counts for every skill it evaluates.
+        dict: {"grades", "shares", "mean", "skills"} : the grade of each question, the share of each grade, the mean value of the exam (out of 5, to adjust the difficulty of the next exam) and the grade of each skill in this exam ({"grade", "score"}). A question counts for every skill it evaluates. The notes of the skills show their new grade and their history.
     """
     document = objects.find_document("exams", exam)
-    questions = _questions(document)
+    data = _data(document)
+    questions = data["questions"]
     solutions = _read_solutions(exam)
     stored = _store_grades(exam, grades) if grades else _read_grades(exam)
     ungraded = [number for number in range(1, len(questions) + 1) if number not in stored]
@@ -296,20 +303,24 @@ def correct_exam(exam: str, grades: Optional[list[QuestionGrade]] = None, commen
     if unknown:
         raise ToolError(f"This exam doesn't evaluate : {', '.join(unknown)}. Evaluated skills : {', '.join(skills)}.")
 
-    for evaluation in document.metadata.get("skills") or []:
-        skill = objects.unlink(evaluation.get("skill", ""))
-        evaluation.update(skills.get(skill, {}))
-        evaluation["comment"] = comments.get(skill, evaluation.get("comment"))
+    previous = data.get("skills") or {}
+    data["skills"] = {skill: {**grade, "comment": comments.get(skill, (previous.get(skill) or {}).get("comment"))} for skill, grade in skills.items()}
     for question, grade in zip(questions, grades):
-        question.pop("outcome", None)
         question["grade"] = grade
+    moment = vault.now()
+    data["corrected_at"] = vault.format_time(moment)
+    mean = quiz.mean_score(grades)
     _set_status(document, "corrected")
-    correction_text = quiz.render_correction(vault.format_session(vault.now()), questions, answers, solutions, explanations, grades)
+    document.metadata["mean"] = mean
+    names = {skill: objects.get_skill(skill).metadata.get("name") or skill for skill in skills}
+    skill_links = {skill: objects.link("skill", skill, objects.skill_file(skill), alias=names[skill]) for skill in skills}
+    correction_text = quiz.render_correction(vault.format_session(moment), questions, answers, solutions, explanations, grades, data["skills"], skill_links)
     document.body = f"{document.body.rstrip()}\n\n{correction_text}"
     vault.write(document)
+    objects.write_exam_data(exam, data)
     _grades_file(exam).unlink(missing_ok=True)  # a retake is graded again
+    objects.refresh_skills(objects.unlink(objects.get_course(objects.document_course(document)).metadata.get("user", "")), skills)
 
-    mean = quiz.mean_score(grades)
     counts = ", ".join(f"{grades.count(grade)} {grade}" for grade in quiz.GRADES if grade in grades)
     course_document = objects.get_course(objects.document_course(document))
     objects.append_to_session(course_document, f"Exam {objects.link('exam', exam, document.path)} corrected : {counts} (mean {mean}/5)")

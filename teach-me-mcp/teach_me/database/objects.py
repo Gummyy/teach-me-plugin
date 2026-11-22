@@ -2,10 +2,10 @@
 
     users/user-<user>.md
     projects/project-<project>.md
-    skills/skill-<skill>.md                        (owned by a user, shared by their courses)
+    skills/skill-<skill>.md                        (owned by a user, shared by their courses ; its grade and history)
     courses/<course>/course-<course>.md            (links to its skills, its plan and the session log)
     courses/<course>/classes/class-<class>.md
-    courses/<course>/exams/quiz-<exam>.md          (evaluations in the frontmatter)
+    courses/<course>/exams/quiz-<exam>.md          (questions, solutions and grades in .teach-me/)
     courses/<course>/exams/exercise-<exam>.md      (project exams)
     courses/<course>/report-card-<course>.md       (generated)
 
@@ -19,12 +19,13 @@ without the prefix.
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Union
 
-from teach_me.database import quiz, vault
+from teach_me.database import blocks, quiz, vault
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 
@@ -208,36 +209,124 @@ def iter_skills(user: Optional[str]) -> Iterator[Document]:
             yield document
 
 
+def exam_data_file(exam: str) -> Path:
+    """The data of an exam that the student doesn't need to see : its questions (kind, skills, options, grade) and the grade of each skill."""
+    return vault.vault_path() / ".teach-me" / "exams" / f"{exam}.json"
+
+
+def exam_data(exam: str) -> dict:
+    """{"questions": [{"kind", "skills", "options", "grade"}], "skills": {skill: {"grade", "score", "comment"}}, "corrected_at"}, or {} for an exam without data."""
+    file = exam_data_file(exam)
+    return json.loads(file.read_text(encoding="utf-8")) if file.is_file() else {}
+
+
+def write_exam_data(exam: str, data: dict) -> None:
+    file = exam_data_file(exam)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+
+
 def skill_grades(user: str) -> dict[str, dict]:
-    """Grade of each skill of a user : {"grade", "score", "history"}.
+    """Grade of each skill of a user : {"grade", "score", "history", "evaluations"}.
 
     The score is the weighted mean of the grades of every question that evaluates the skill, in the
     corrected exams of all the courses (a project exam weighs twice a quiz), and the grade is the letter
-    closest to it. The history holds the grade of the skill in each exam, in chronological order.
+    closest to it. The history holds the grade of the skill in each exam, in chronological order, and
+    the evaluations the details of each : {"exam", "path", "title", "course", "date", "grade", "score", "comment"}.
     """
     exams = [exam for course in iter_courses(user) for exam in iter_exams(course_slug(course))]
     exams.sort(key=lambda document: vault.parse_time(document.metadata.get("created_at")) or datetime.min)  # stable : keeps the order of each course
     totals: dict[str, list[float]] = {}
-    history: dict[str, list[str]] = {}
+    evaluations: dict[str, list[dict]] = {}
     for exam in exams:
         if exam.metadata.get("status") != "corrected":
             continue
+        data = exam_data(slug(exam))
         coefficient = EXAM_COEFFICIENTS[exam_type(exam)]
-        for question in exam.metadata.get("questions") or []:
+        for question in data.get("questions") or []:
             if question.get("grade") not in quiz.GRADES:
                 continue
             for skill in question.get("skills") or []:
                 total = totals.setdefault(skill, [0.0, 0.0])
                 total[0] += coefficient * quiz.GRADES[question["grade"]]["value"]
                 total[1] += coefficient
-        for evaluation in exam.metadata.get("skills") or []:
-            if isinstance(evaluation, dict) and evaluation.get("grade") in quiz.GRADES:
-                history.setdefault(unlink(evaluation.get("skill", "")), []).append(evaluation["grade"])
+        for skill, evaluation in (data.get("skills") or {}).items():
+            if evaluation.get("grade") in quiz.GRADES:
+                evaluations.setdefault(skill, []).append(
+                    {
+                        "exam": slug(exam),
+                        "path": exam.path,
+                        "title": str(exam.metadata.get("title") or slug(exam)),
+                        "course": document_course(exam),
+                        "date": data.get("corrected_at") or exam.metadata.get("updated_at"),
+                        **{key: evaluation.get(key) for key in ("grade", "score", "comment")},
+                    }
+                )
     grades = {}
     for skill, (weighted, weights) in totals.items():
         score = round(weighted / weights, 2)
-        grades[skill] = {"grade": quiz.grade_of(score), "score": score, "history": history.get(skill, [])}
+        found = evaluations.get(skill, [])
+        grades[skill] = {"grade": quiz.grade_of(score), "score": score, "history": [e["grade"] for e in found], "evaluations": found}
     return grades
+
+
+HISTORY_BLOCK = "history"
+"""The generated block of a skill note : its grade in every exam that evaluated it."""
+
+
+def _cell(value) -> str:
+    return " ".join(str(value if value is not None else "").replace("|", "\\|").split())
+
+
+def history_table(evaluations: list[dict]) -> str:
+    lines = ["## 📈 History", ""]
+    if not evaluations:
+        return "\n".join(lines + ["Not evaluated yet : the grades of the exams that evaluate this skill will show here."])
+    lines += ["| Date | Exam | Course | Grade | Score | Comment |", "| --- | --- | --- | --- | --- | --- |"]
+    for evaluation in evaluations:
+        moment = vault.parse_time(evaluation["date"])
+        course = course_file(evaluation["course"])
+        course_name = vault.read(course).metadata.get("name") if course.is_file() else evaluation["course"]
+        exam_link = link("exam", evaluation["exam"], evaluation["path"], alias=evaluation["title"]).replace("|", "\\|")
+        course_link_text = link("course", evaluation["course"], course, alias=str(course_name or evaluation["course"])).replace("|", "\\|")
+        lines.append(
+            f"| {f'{moment:%Y-%m-%d}' if moment else ''} | {exam_link} | {course_link_text} | {evaluation['grade']} | "
+            f"{evaluation['score']}/5 | {_cell(evaluation.get('comment'))} |"
+        )
+    return "\n".join(lines)
+
+
+def skill_body(body: str, evaluations: list[dict]) -> str:
+    """The body of a skill note with its history rewritten and a "My notes" section."""
+    return blocks.ensure_notes(blocks.replace(body, HISTORY_BLOCK, history_table(evaluations), vault.format_session(vault.now())))
+
+
+def refresh_skills(user: str, skills: Optional[Iterable[str]] = None) -> list[str]:
+    """Writes the grade of each skill of a user (or only of `skills`) in its note : the properties grade, score,
+    evaluations, last_evaluated and progression, and the history table. Returns the slugs of the notes changed."""
+    grades = skill_grades(user)
+    wanted = None if skills is None else set(skills)
+    changed = []
+    for document in iter_skills(user):
+        name = slug(document)
+        if wanted is not None and name not in wanted:
+            continue
+        grade = grades.get(name) or {}
+        found = grade.get("evaluations") or []
+        metadata = {
+            **document.metadata,
+            "grade": grade.get("grade"),
+            "score": grade.get("score"),
+            "evaluations": len(found),
+            "last_evaluated": found[-1]["date"] if found else None,
+            "progression": " → ".join(grade.get("history") or []) or None,
+        }
+        body = skill_body(document.body, found)
+        if metadata != document.metadata or body != document.body:
+            document.metadata, document.body = metadata, body
+            vault.write(document)
+            changed.append(name)
+    return changed
 
 
 # --------------------------------------------------------------------------- #

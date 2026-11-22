@@ -11,10 +11,12 @@ QUESTION = {"kind": "single", "text": "?", "skills": ["convolution"], "options":
 def test_create_skills(course):
     document = objects.get_skill("convolution")
     assert document.metadata["name"] == "convolution" and document.metadata["user"] == "[[user-alice]]"
-    assert document.body == "Computes and interprets a 2D convolution"
+    assert document.metadata["description"] == "Computes and interprets a 2D convolution"
+    assert document.metadata["grade"] is None and document.metadata["evaluations"] == 0
+    assert "Not evaluated yet" in document.body and document.body.endswith("## ✏️ My notes")
     created = create_skills("alice", [{"name": "Pooling", "description": "Downsamples a feature map"}, {"name": "CONVOLUTION", "description": "Other"}])
     assert created == [{"slug": "pooling", "name": "Pooling", "reused": False}, {"slug": "convolution", "name": "convolution", "reused": True}]
-    assert objects.get_skill("convolution").body == "Computes and interprets a 2D convolution"  # a reused skill keeps its description
+    assert objects.get_skill("convolution").metadata["description"] == "Computes and interprets a 2D convolution"  # a reused skill keeps its description
 
 
 def test_unknown_skill_lists_the_skills_of_the_user_only(course):
@@ -68,6 +70,9 @@ def test_a_skill_shared_by_two_courses_has_one_history(course):
         submit_answers(exam, [answer])
         grade_questions(exam, [{"question": 1, "explanation": "."}])
         correct_exam(exam)
-    assert objects.skill_grades("alice") == {"convolution": {"grade": "B", "score": 3.0, "history": ["D", "A"]}}
+    grades = objects.skill_grades("alice")["convolution"]
+    assert {key: grades[key] for key in ("grade", "score", "history")} == {"grade": "B", "score": 3.0, "history": ["D", "A"]}
+    assert [evaluation["course"] for evaluation in grades["evaluations"]] == ["computer-vision", "image-processing"]
+    assert objects.get_skill("convolution").metadata["progression"] == "D → A"
     assert list_skills("alice", course)[0]["grade"] == "B"
     assert "| B (3.0/5) | D → A |" in report_card(course)

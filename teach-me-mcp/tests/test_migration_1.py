@@ -41,5 +41,22 @@ def test_every_note_has_a_type(migrated):
     assert exam.metadata["type"] == "quiz" and objects.exam_type(exam) == "quiz"
 
 
+def test_exams_are_flat(migrated):
+    exam = note("courses/computer-vision/exams/quiz-convolution-quiz.md").metadata
+    assert exam["skills"] == ["[[skill-convolution]]"] and exam["questions"] == 2 and exam["mean"] == 4.5
+    data = objects.exam_data("convolution-quiz")
+    assert [question["grade"] for question in data["questions"]] == ["A", "B"]
+    assert data["skills"] == {"convolution": {"grade": "A", "score": 4.5, "comment": "Good start."}}
+
+
+def test_skill_notes_show_their_grade(migrated):
+    skill = note("skills/skill-convolution.md")
+    assert skill.metadata["description"] == "Computes and interprets a 2D convolution"
+    assert skill.metadata["grade"] == "A" and skill.metadata["evaluations"] == 1 and skill.metadata["progression"] == "A"
+    assert "| A | 4.5/5 | Good start. |" in skill.body and skill.body.endswith("## ✏️ My notes")
+    untouched = note("skills/skill-cnn-architecture.md")
+    assert untouched.metadata["grade"] is None and "Not evaluated yet" in untouched.body
+
+
 def test_migrating_twice_changes_nothing(migrated):
     assert migrate_vault()["changes"] == []

@@ -36,7 +36,7 @@ def report_card(course: str) -> str:
         link = objects.link("skill", name, skill.path, alias=skill.metadata.get("name") or name)
         grade = grades.get(name)
         lines.append(
-            f"| {_cell(link)} | {_cell(skill.body)} | "
+            f"| {_cell(link)} | {_cell(skill.metadata.get('description'))} | "
             + (f"{grade['grade']} ({grade['score']}/5) | {' → '.join(grade['history'])} |" if grade else "— | not evaluated yet |")
         )
 

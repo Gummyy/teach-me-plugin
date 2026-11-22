@@ -32,10 +32,10 @@ def _progress(course: str) -> dict:
     classes_since = sum(1 for document in objects.iter_documents(course, "classes") if _created(document) > since)
 
     advice, last = [], None
-    corrected = [exam for exam in exams if exam.metadata.get("status") == "corrected" and exam.metadata.get("questions")]
+    corrected = [exam for exam in exams if exam.metadata.get("status") == "corrected" and objects.exam_data(objects.slug(exam)).get("questions")]
     if corrected:
         exam = corrected[-1]
-        grades = [q.get("grade") for q in exam.metadata["questions"] if q.get("grade") in quiz.GRADES]
+        grades = [q.get("grade") for q in objects.exam_data(objects.slug(exam))["questions"] if q.get("grade") in quiz.GRADES]
         if grades:
             mean = quiz.mean_score(grades)
             shares = {grade: round(grades.count(grade) / len(grades), 2) for grade in quiz.GRADES}
@@ -150,7 +150,7 @@ def _used_skills(course: str, steps: list[dict]) -> dict[str, list[str]]:
         for skill in step["skills"]:
             used.setdefault(skill, []).append(f"step {step['slug']}")
     for exam in objects.iter_exams(course):
-        for question in exam.metadata.get("questions") or []:
+        for question in objects.exam_data(objects.slug(exam)).get("questions") or []:
             for skill in question.get("skills") or []:
                 used.setdefault(skill, []).append(f"exam {objects.slug(exam)}")
     return {skill: list(dict.fromkeys(places)) for skill, places in used.items()}

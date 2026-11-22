@@ -268,9 +268,20 @@ def _quote(text: str) -> str:
     return "\n".join(f"> {line}" if line.strip() else ">" for line in text.strip().splitlines())
 
 
-def render_correction(label: str, questions: list[dict], answers: list, solutions: list, explanations: list[str], grades: list[str]) -> str:
+def _cell(value) -> str:
+    return " ".join(str(value if value is not None else "").replace("|", "\\|").split())
+
+
+def render_correction(
+    label: str, questions: list[dict], answers: list, solutions: list, explanations: list[str], grades: list[str], skills: dict[str, dict], skill_links: dict[str, str]
+) -> str:
+    """The correction appended to an exam : the grades, the grade of each skill with its comment, then each question."""
     counts = ", ".join(f"**{grades.count(grade)}** {grade}" for grade in GRADES if grade in grades)
     parts = [f"## ✅ Correction ({label})", f"{counts} · mean **{mean_score(grades)}/5**"]
+    rows = ["| Skill | Grade | Score | Comment |", "| --- | --- | --- | --- |"]
+    for skill, evaluation in skills.items():
+        rows.append(f"| {skill_links[skill].replace('|', chr(92) + '|')} | {evaluation['grade']} | {evaluation['score']}/5 | {_cell(evaluation.get('comment'))} |")
+    parts.append("\n".join(rows))
     for number, (question, answer, solution, explanation, grade) in enumerate(zip(questions, answers, solutions, explanations, grades), start=1):
         if question["kind"] == "open":
             details = f"**Your answer :**\n\n{_format_answer(question, answer)}\n\n**Expected :**\n\n{solution}"

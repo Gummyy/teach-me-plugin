@@ -17,7 +17,7 @@ Every exercise follows the same cycle :
    - answered in the vault : call `read_exam`.
 
    Both return the answers, the solutions and a proposed grade for each closed question, from the options the student ticked (A for the exact answer, then B, C or D as the answer drifts away from it).
-4. Call `correct_exam` with the grade of every question, each with an explanation. Give the grade of each open question. For a closed question, leave the grade out to accept the proposal, or change it when the question deserves it. The correction is appended below the exam, which is never rewritten.
+4. Call `correct_exam` with the grade of every question, each with an explanation. Give the grade of each open question. For a closed question, leave the grade out to accept the proposal, or change it when the question deserves it. The correction is appended below the exam, which is never rewritten. Give a short `comment` for each evaluated skill : it shows in the correction and in the history of the skill, in its note.
 
    For a long project exam, you can grade the questions in several steps with `grade_questions` (grading a question again replaces its grade), then call `correct_exam` with the remaining ones.
 5. Share the result in the chat, briefly : what went well, what to review.

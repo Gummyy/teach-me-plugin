@@ -1,7 +1,8 @@
 """Creating, listing and editing the skills of a user.
 
 A skill is a note of its own (skills/<skill>.md) owned by a user. Several courses of that user can
-evaluate the same skill : its marks come from the exams of all of them.
+evaluate the same skill : its marks come from the exams of all of them. Its note shows them : its
+grade in its properties, and the grade of every exam that evaluated it in its history.
 """
 
 from typing import Optional
@@ -17,7 +18,7 @@ def _summary(document: Document, grades: dict[str, dict]) -> dict:
     return {
         "slug": objects.slug(document),
         "name": document.metadata.get("name"),
-        "description": document.body,
+        "description": document.metadata.get("description") or "",
         **{key: (grades.get(objects.slug(document)) or {}).get(key) for key in ("grade", "score")},
     }
 
@@ -55,13 +56,9 @@ def create_skills(user: str, skills: list[SkillDeclaration]) -> list[dict]:
             created.append({"slug": objects.slug(known), "name": known.metadata.get("name"), "reused": True})
             continue
         slug = vault.unique_slug(vault.slugify(skill["name"]), lambda s: objects.skill_file(s).exists())
-        vault.write(
-            Document(
-                objects.skill_file(slug),
-                {"type": "skill", "name": skill["name"], "user": user_link, "created_at": moment},
-                skill["description"],
-            )
-        )
+        metadata = {"type": "skill", "name": skill["name"], "description": skill["description"], "user": user_link, "created_at": moment}
+        metadata.update({"grade": None, "score": None, "evaluations": 0, "last_evaluated": None, "progression": None})
+        vault.write(Document(objects.skill_file(slug), metadata, objects.skill_body("", [])))
         created.append({"slug": slug, "name": skill["name"], "reused": False})
     return created
 
@@ -113,7 +110,7 @@ def edit_skill(skill: str, name: Optional[str] = None, description: Optional[str
         if name != document.metadata.get("name"):
             replaced["name"] = document.metadata.get("name")
         document.metadata["name"] = name
-    document.body, previous = edit_text(document.body, description, None)
+    document.metadata["description"], previous = edit_text(str(document.metadata.get("description") or ""), description, None)
     if previous is not None:
         replaced["description"] = previous
     document.metadata["updated_at"] = vault.format_time(vault.now())
