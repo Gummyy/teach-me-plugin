@@ -36,6 +36,9 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
 
     dashboards.ensure_home()
     profile = get_user(user)
+    restored = objects.refresh_derived(user)  # what the student changed by hand in a grade, a mean or a status of an exam
+    if restored:
+        vault.warn(f"Restored from the hidden data of the exams, nothing to do : {'; '.join(restored)}.")
     preferences = {**profile["preferences"], **(profile["interface_preferences"].get(interface) or {})}
     result.update({"user": profile, "preferences": preferences, "courses": list_courses(user)})
     if course is None:

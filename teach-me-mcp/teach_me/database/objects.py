@@ -121,9 +121,65 @@ def slug(document: Union[Document, Path]) -> str:
     return stem
 
 
-def exam_type(document: Document) -> str:
-    """The type of an exam, "quiz" or "project", from the `type` of its note."""
+def note_exam_type(document: Document) -> str:
+    """The type of an exam, "quiz" or "project", as the `type` of its note says."""
     return "project" if document.metadata.get("type") in (EXAM_NOTE_TYPES["project"], "project") else "quiz"
+
+
+def exam_type(document: Document) -> str:
+    """The type of an exam, "quiz" or "project" : from its hidden data, the note only shows it."""
+    data_type = exam_data(slug(document), strict=False).get("type")
+    return data_type if data_type in EXAM_TYPES else note_exam_type(document)
+
+
+# The hidden data of an exam (.teach-me/exams/<exam>.json) is the source of truth : the properties of its note
+# (type, status, mean, questions, skills) only show it, and are written again from it whenever they differ,
+# so that a hand edit in Obsidian can never change a grade.
+
+
+def exam_facts(document: Document) -> Optional[dict]:
+    """What the hidden data of an exam says about it : {"type", "status", "mean", "questions", "skills"}, or None for an exam
+    not given yet (a planned step) or without data. Assigned or filled comes from the answers in the note."""
+    data = exam_data(slug(document), strict=False)
+    questions = data.get("questions") or []
+    if not questions:
+        return None
+    kind = data.get("type") if data.get("type") in EXAM_TYPES else note_exam_type(document)
+    grades = [question.get("grade") for question in questions]
+    if data.get("corrected_at") and all(grade in quiz.GRADES for grade in grades):
+        status, mean = "corrected", quiz.mean_score(grades)
+    else:
+        answered = any(answer is not None for answer in quiz.parse_answers(document.body, questions))
+        status, mean = ("filled" if answered else "assigned"), None
+    skills = list(dict.fromkeys(skill for question in questions for skill in question.get("skills") or []))
+    return {"type": kind, "status": status, "mean": mean, "questions": len(questions), "skills": skills}
+
+
+def exam_status(document: Document) -> Optional[str]:
+    """The status of an exam : from its hidden data once it was given, from its note while it is only planned."""
+    facts = exam_facts(document)
+    return facts["status"] if facts else document.metadata.get("status")
+
+
+def is_corrected(document: Document) -> bool:
+    return exam_status(document) == "corrected"
+
+
+def show_exam_facts(document: Document) -> list[str]:
+    """Writes into the properties of an exam note what its hidden data says. Returns the properties that changed ; the caller writes the note."""
+    facts = exam_facts(document)
+    if facts is None:
+        return []
+    wanted = {
+        "type": EXAM_NOTE_TYPES[facts["type"]],
+        "status": facts["status"],
+        "skills": [link_or_name("skill", skill, skill_file(skill)) for skill in facts["skills"]],
+        "questions": facts["questions"],
+        "mean": facts["mean"],
+    }
+    changed = [key for key, value in wanted.items() if document.metadata.get(key) != value]
+    document.metadata.update({key: wanted[key] for key in changed})
+    return changed
 
 
 def course_link(course: str) -> str:
@@ -240,13 +296,11 @@ def skill_grades(user: str) -> dict[str, dict]:
     the evaluations the details of each : {"exam", "path", "title", "course", "date", "grade", "score", "comment"}.
     """
     exams = [exam for course in iter_courses(user) for exam in iter_exams(course_slug(course))]
-    exams.sort(key=lambda document: vault.parse_time(document.metadata.get("created_at")) or datetime.min)  # stable : keeps the order of each course
+    exams = [(exam, exam_data(slug(exam), strict=False)) for exam in exams if is_corrected(exam)]
+    exams.sort(key=lambda pair: vault.parse_time(pair[1].get("corrected_at")) or vault.parse_time(pair[0].metadata.get("created_at")) or datetime.min)  # stable : keeps the order of each course
     totals: dict[str, list[float]] = {}
     evaluations: dict[str, list[dict]] = {}
-    for exam in exams:
-        if exam.metadata.get("status") != "corrected":
-            continue
-        data = exam_data(slug(exam), strict=False)
+    for exam, data in exams:
         coefficient = EXAM_COEFFICIENTS[exam_type(exam)]
         for question in data.get("questions") or []:
             if question.get("grade") not in quiz.GRADES:
@@ -331,6 +385,20 @@ def refresh_skills(user: str, skills: Optional[Iterable[str]] = None) -> list[st
             document.metadata, document.body = metadata, body
             vault.write(document)
             changed.append(name)
+    return changed
+
+
+def refresh_derived(user: str) -> list[str]:
+    """Writes again every value the tools can deduce from their hidden data, in case the student changed it by hand :
+    the properties of the exam notes, then the grades and histories of the skill notes. Returns one line per note changed."""
+    changed = []
+    for course in iter_courses(user):
+        for exam in iter_exams(course_slug(course)):
+            fixed = show_exam_facts(exam)
+            if fixed:
+                vault.write(exam)
+                changed.append(f"{vault.relative(exam.path)} : {', '.join(fixed)}")
+    changed += [f"{vault.relative(skill_file(skill))} : grade and history" for skill in refresh_skills(user)]
     return changed
 
 
@@ -490,7 +558,7 @@ def document_course(document: Document) -> str:
 def iter_documents(course: str, kind: str) -> Iterator[Document]:
     """The classes or the exams of a course that were given (not only planned), in chronological order : by date, then in the order of the plan."""
     documents = vault.read_all((courses_dir() / course / kind).glob("*.md"))
-    documents = [document for document in documents if document.metadata.get("status") not in ("planned", "dropped")]
+    documents = [document for document in documents if document.metadata.get("status") not in ("planned", "dropped") or exam_facts(document)]
     documents.sort(
         key=lambda document: (
             vault.parse_time(document.metadata.get("started_at")) or vault.parse_time(document.metadata.get("created_at")) or datetime.min,

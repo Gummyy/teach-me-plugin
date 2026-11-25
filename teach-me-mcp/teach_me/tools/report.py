@@ -48,7 +48,7 @@ def report_card(course: str) -> str:
             link = objects.link("exam", objects.slug(exam), exam.path, alias=exam.metadata.get("title") or objects.slug(exam))
             lines.append(
                 f"| {f'{created:%Y-%m-%d}' if created else ''} | {_cell(link)} | "
-                f"{objects.exam_type(exam)} | {_cell(exam.metadata.get('status'))} |"
+                f"{objects.exam_type(exam)} | {_cell(objects.exam_status(exam))} |"
             )
     else:
         lines.append("No exam yet.")

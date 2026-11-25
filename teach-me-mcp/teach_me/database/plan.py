@@ -103,7 +103,10 @@ def progress(course: str, step: dict) -> str:
     path = objects.step_file(course, step)
     if not path.is_file():
         return "planned"
-    return status_progress(step["kind"], vault.read(path).metadata.get("status"))
+    found = vault.read_all([path])
+    if not found:
+        return "planned"
+    return status_progress(step["kind"], found[0].metadata.get("status") if step["kind"] == "class" else objects.exam_status(found[0]))
 
 
 def with_progress(course: str, steps: list[dict]) -> list[dict]:

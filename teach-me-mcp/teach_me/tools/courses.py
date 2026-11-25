@@ -32,10 +32,10 @@ def _progress(course: str) -> dict:
     classes_since = sum(1 for document in objects.iter_documents(course, "classes") if _created(document) > since)
 
     advice, last = [], None
-    corrected = [exam for exam in exams if exam.metadata.get("status") == "corrected" and objects.exam_data(objects.slug(exam), strict=False).get("questions")]
+    corrected = [exam for exam in exams if objects.is_corrected(exam)]
     if corrected:
         exam = corrected[-1]
-        grades = [q.get("grade") for q in objects.exam_data(objects.slug(exam), strict=False)["questions"] if q.get("grade") in quiz.GRADES]
+        grades = [q.get("grade") for q in objects.exam_data(objects.slug(exam), strict=False).get("questions") or [] if q.get("grade") in quiz.GRADES]
         if grades:
             mean = quiz.mean_score(grades)
             shares = {grade: round(grades.count(grade) / len(grades), 2) for grade in quiz.GRADES}
@@ -48,7 +48,7 @@ def _progress(course: str) -> dict:
                 advice.append("The last exam was too easy : raise the difficulty of the next one.")
             else:
                 advice.append("The difficulty of the last exam was right : keep it.")
-    pending = [exam for exam in exams if exam.metadata.get("status") in ("assigned", "filled")]
+    pending = [exam for exam in exams if objects.exam_status(exam) in ("assigned", "filled")]
     if pending:
         advice.append(f"{len(pending)} exam(s) waiting for an answer or a correction : deal with them before creating a new one.")
     elif classes_since >= CLASSES_BEFORE_EXERCISE:
@@ -350,11 +350,11 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
             "slug": objects.slug(exam),
             "title": exam.metadata.get("title"),
             "type": objects.exam_type(exam),
-            "status": exam.metadata.get("status"),
+            "status": objects.exam_status(exam),
             "path": vault.relative(exam.path),
         }
         for exam in objects.iter_exams(course)
-        if exam.metadata.get("status") in ("assigned", "filled")
+        if objects.exam_status(exam) in ("assigned", "filled")
     ]
     steps = plans.with_progress(course, plans.course_plan(document))
     upcoming = [step for step in steps if step["progress"] != "done"]

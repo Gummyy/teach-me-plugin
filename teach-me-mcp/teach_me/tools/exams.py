@@ -77,9 +77,10 @@ def _proposals(questions: list[dict], answers: list, solutions: list) -> list[Op
     return proposals
 
 
-def _set_status(document: Document, status: str) -> None:
-    document.metadata["status"] = status
-    document.metadata["updated_at"] = vault.format_time(vault.now())
+def _show_facts(document: Document) -> None:
+    """The properties of the exam note written again from its hidden data, the source of truth."""
+    if objects.show_exam_facts(document):
+        document.metadata["updated_at"] = vault.format_time(vault.now())
 
 
 def _store_grades(exam: str, grades: list[QuestionGrade]) -> dict[int, dict]:
@@ -176,7 +177,7 @@ def create_exam(
         }
     )
     plans.fill(path, metadata, quiz.render_exam(title, intro or "", public, skill_links))
-    objects.write_exam_data(exam, {"questions": [_stored(question) for question in public], "skills": {}})
+    objects.write_exam_data(exam, {"type": type, "questions": [_stored(question) for question in public], "skills": {}})
 
     vault.write_json(_solutions_file(exam), solutions)
 
@@ -200,10 +201,14 @@ def submit_answers(exam: str, answers: list[str]) -> dict:
     document = objects.find_document("exams", exam)
     questions = _questions(document)
     given = quiz.normalize_answers(answers, questions)
-    document.body = quiz.write_answers(document.body, questions, given)
-    _set_status(document, "filled")
-    vault.write(document)
+    data = _data(document)
+    if data.get("corrected_at"):  # a retake : the exam counts again once it is corrected again
+        data["corrected_at"] = None
+        objects.write_exam_data(exam, data)
     _grades_file(exam).unlink(missing_ok=True)  # graded on other answers
+    document.body = quiz.write_answers(document.body, questions, given)
+    _show_facts(document)
+    vault.write(document)
     view = read_exam(exam)
     view.pop("content")
     return view
@@ -226,14 +231,15 @@ def read_exam(exam: str) -> dict:
     document = objects.find_document("exams", exam)
     questions = _questions(document)
     answers = quiz.parse_answers(document.body, questions)
-    if document.metadata.get("status") == "assigned" and any(answer is not None for answer in answers):
-        _set_status(document, "filled")
+    before = dict(document.metadata)
+    _show_facts(document)
+    if document.metadata != before:
         vault.write(document)
     solutions = vault.read_json(_solutions_file(exam))
     return {
         "slug": exam,
         "title": document.metadata.get("title"),
-        "type": objects.exam_type(document),
+        "type": objects.exam_type(document),  # from the hidden data
         "status": document.metadata.get("status"),
         "path": vault.relative(document.path),
         "content": document.body,
@@ -302,16 +308,15 @@ def correct_exam(exam: str, grades: Optional[list[QuestionGrade]] = None, commen
     moment = vault.now()
     data["corrected_at"] = vault.format_time(moment)
     mean = quiz.mean_score(grades)
-    _set_status(document, "corrected")
-    document.metadata["mean"] = mean
+    objects.write_exam_data(exam, data)  # the source of truth first : the notes are only views of it
+    _grades_file(exam).unlink(missing_ok=True)  # a retake is graded again
+    _show_facts(document)
     notes = {skill: objects.linked_note("skill", skill, objects.skill_file(skill)) for skill in skills}
     names = {skill: (note.metadata.get("name") if note else None) or skill for skill, note in notes.items()}
     skill_links = {skill: objects.link_or_name("skill", skill, objects.skill_file(skill), alias=names[skill]) for skill in skills}
     correction_text = quiz.render_correction(vault.format_session(moment), questions, answers, solutions, explanations, grades, data["skills"], skill_links)
     document.body = f"{document.body.rstrip()}\n\n{correction_text}"
     vault.write(document)
-    objects.write_exam_data(exam, data)
-    _grades_file(exam).unlink(missing_ok=True)  # a retake is graded again
     objects.refresh_skills(objects.unlink(objects.get_course(objects.document_course(document)).metadata.get("user", "")), skills)
 
     counts = ", ".join(f"{grades.count(grade)} {grade}" for grade in quiz.GRADES if grade in grades)
