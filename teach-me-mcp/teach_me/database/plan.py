@@ -49,8 +49,7 @@ def step_notes(course: str, include_dropped: bool = False) -> list[Document]:
     """The notes of the steps of a course, in the order of the plan."""
     notes = []
     for folder in ("classes", "exams"):
-        for path in (objects.courses_dir() / course / folder).glob("*.md"):
-            document = vault.read(path)
+        for document in vault.read_all((objects.courses_dir() / course / folder).glob("*.md")):
             if document.metadata.get("type") not in KINDS:
                 continue
             if document.metadata.get("status") == DROPPED and not include_dropped:
@@ -62,6 +61,11 @@ def step_notes(course: str, include_dropped: bool = False) -> list[Document]:
 
 def _order(document: Document) -> float:
     value = document.metadata.get("order")
+    if isinstance(value, str):  # a number typed as text in Obsidian
+        try:
+            value = float(value.strip())
+        except ValueError:
+            pass
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else float("inf")
 
 
@@ -72,7 +76,7 @@ def as_step(document: Document) -> dict:
         "kind": KINDS[metadata["type"]],
         "title": str(metadata.get("title") or objects.slug(document)),
         "description": str(metadata.get("description") or ""),
-        "skills": [objects.unlink(skill) for skill in metadata.get("skills") or []],
+        "skills": list(dict.fromkeys(objects.unlink(skill) for skill in objects.as_list(metadata.get("skills")))),
         "importance": metadata.get("importance") if metadata.get("importance") in IMPORTANCES else "core",
     }
     if metadata.get("suggested_resources"):

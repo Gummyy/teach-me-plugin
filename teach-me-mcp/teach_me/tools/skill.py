@@ -81,7 +81,8 @@ def list_skills(user: str, course: Optional[str] = None) -> list[dict]:
     owner = objects.unlink(document.metadata.get("user", ""))
     if owner != user:
         raise ToolError(f"The course '{course}' belongs to '{owner}', not to '{user}'.")
-    return [_summary(objects.get_skill(skill), grades) for skill in objects.course_skills(document)]
+    found = (objects.linked_note("skill", skill, objects.skill_file(skill)) for skill in objects.course_skills(document))
+    return [_summary(skill, grades) for skill in found if skill is not None]
 
 
 def edit_skill(skill: str, name: Optional[str] = None, description: Optional[str] = None) -> dict:

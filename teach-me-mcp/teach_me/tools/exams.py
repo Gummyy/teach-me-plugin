@@ -304,8 +304,9 @@ def correct_exam(exam: str, grades: Optional[list[QuestionGrade]] = None, commen
     mean = quiz.mean_score(grades)
     _set_status(document, "corrected")
     document.metadata["mean"] = mean
-    names = {skill: objects.get_skill(skill).metadata.get("name") or skill for skill in skills}
-    skill_links = {skill: objects.link("skill", skill, objects.skill_file(skill), alias=names[skill]) for skill in skills}
+    notes = {skill: objects.linked_note("skill", skill, objects.skill_file(skill)) for skill in skills}
+    names = {skill: (note.metadata.get("name") if note else None) or skill for skill, note in notes.items()}
+    skill_links = {skill: objects.link_or_name("skill", skill, objects.skill_file(skill), alias=names[skill]) for skill in skills}
     correction_text = quiz.render_correction(vault.format_session(moment), questions, answers, solutions, explanations, grades, data["skills"], skill_links)
     document.body = f"{document.body.rstrip()}\n\n{correction_text}"
     vault.write(document)

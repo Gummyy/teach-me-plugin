@@ -16,7 +16,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Iterator, Optional
+from typing import Any, Callable, Iterable, Iterator, Optional
 
 import yaml
 
@@ -234,6 +234,18 @@ def read(path: Path) -> Document:
     return Document(path, metadata, body, mtime_ns)
 
 
+def read_all(paths: Iterable[Path]) -> list[Document]:
+    """The notes that can be read among `paths`. A note that can't be (invalid YAML, merge conflict) is skipped, with a warning :
+    one broken note must never stop the tools from working on the others."""
+    documents = []
+    for path in paths:
+        try:
+            documents.append(read(path))
+        except ToolError as error:
+            warn(f"Skipped {relative(path)} : {error}")
+    return documents
+
+
 def write_text(path: Path, text: str) -> None:
     """Writes a file atomically : into a temporary file next to it, then renamed over it, so that a crash never leaves a half written file."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,6 +331,33 @@ def repair(path: str, frontmatter: str) -> Document:
 
 _written: ContextVar[Optional[list[Path]]] = ContextVar("written", default=None)
 """The files written by the current tool call, tracked by `serialized`."""
+_warnings: ContextVar[Optional[list[str]]] = ContextVar("warnings", default=None)
+"""What the current tool call skipped or couldn't resolve, collected by `reporting`."""
+
+
+def warn(message: str) -> None:
+    """Records a problem of the vault that the current tool call worked around : a note it skipped, a link to a missing note."""
+    found = _warnings.get()
+    if found is not None and message not in found:
+        found.append(message)
+
+
+def reporting(function: Callable) -> Callable:
+    """Runs a tool and adds the problems it worked around to its result, as `vault_warnings`, when the result is a dict."""
+
+    @functools.wraps(function)
+    def wrapper(*args, **kwargs):
+        token = _warnings.set([])
+        try:
+            result = function(*args, **kwargs)
+            found = _warnings.get()
+        finally:
+            _warnings.reset(token)
+        if found and isinstance(result, dict):
+            result = {**result, "vault_warnings": found}
+        return result
+
+    return wrapper
 
 
 @contextmanager

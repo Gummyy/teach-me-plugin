@@ -107,7 +107,7 @@ def resource_file(course: str, resource: str) -> Path:
 
 def iter_resources(course: str) -> Iterator[Document]:
     """The resources shared in a course, in the order they were shared."""
-    documents = [vault.read(path) for path in (courses_dir() / course / "resources").glob(f"{PREFIXES['resource']}*.md")]
+    documents = vault.read_all((courses_dir() / course / "resources").glob(f"{PREFIXES['resource']}*.md"))
     documents.sort(key=lambda document: (vault.parse_time(document.metadata.get("created_at")) or datetime.min, document.path.stem))
     yield from documents
 
@@ -172,8 +172,7 @@ def get_user(user: str) -> Document:
 
 
 def iter_users() -> Iterator[Document]:
-    for path in sorted(users_dir().glob(f"{PREFIXES['user']}*.md")):
-        yield vault.read(path)
+    yield from vault.read_all(sorted(users_dir().glob(f"{PREFIXES['user']}*.md")))
 
 
 def get_project(project: str, user: Optional[str] = None) -> Document:
@@ -185,8 +184,7 @@ def get_project(project: str, user: Optional[str] = None) -> Document:
 
 
 def iter_projects(user: Optional[str]) -> Iterator[Document]:
-    for path in sorted(projects_dir().glob(f"{PREFIXES['project']}*.md")):
-        document = vault.read(path)
+    for document in vault.read_all(sorted(projects_dir().glob(f"{PREFIXES['project']}*.md"))):
         if _owned_by(document, user):
             yield document
 
@@ -205,8 +203,7 @@ def get_skill(skill: str, user: Optional[str] = None) -> Document:
 
 
 def iter_skills(user: Optional[str]) -> Iterator[Document]:
-    for path in sorted(skills_dir().glob(f"{PREFIXES['skill']}*.md")):
-        document = vault.read(path)
+    for document in vault.read_all(sorted(skills_dir().glob(f"{PREFIXES['skill']}*.md"))):
         if _owned_by(document, user):
             yield document
 
@@ -216,9 +213,18 @@ def exam_data_file(exam: str) -> Path:
     return vault.vault_path() / ".teach-me" / "exams" / f"{exam}.json"
 
 
-def exam_data(exam: str) -> dict:
-    """{"questions": [{"kind", "skills", "options", "grade"}], "skills": {skill: {"grade", "score", "comment"}}, "corrected_at"}, or {} for an exam without data."""
-    return vault.read_json(exam_data_file(exam), {})
+def exam_data(exam: str, strict: bool = True) -> dict:
+    """{"questions": [{"kind", "skills", "options", "grade"}], "skills": {skill: {"grade", "score", "comment"}}, "corrected_at"}, or {} for an exam without data.
+
+    Raises a ToolError when the file can't be read, unless `strict` is False : the exam is then skipped, with a warning."""
+    try:
+        data = vault.read_json(exam_data_file(exam), {})
+    except ToolError as error:
+        if strict:
+            raise
+        vault.warn(f"Skipped the data of the exam '{exam}' : {error}")
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def write_exam_data(exam: str, data: dict) -> None:
@@ -240,7 +246,7 @@ def skill_grades(user: str) -> dict[str, dict]:
     for exam in exams:
         if exam.metadata.get("status") != "corrected":
             continue
-        data = exam_data(slug(exam))
+        data = exam_data(slug(exam), strict=False)
         coefficient = EXAM_COEFFICIENTS[exam_type(exam)]
         for question in data.get("questions") or []:
             if question.get("grade") not in quiz.GRADES:
@@ -285,7 +291,7 @@ def history_table(evaluations: list[dict]) -> str:
     for evaluation in evaluations:
         moment = vault.parse_time(evaluation["date"])
         course = course_file(evaluation["course"])
-        course_name = vault.read(course).metadata.get("name") if course.is_file() else evaluation["course"]
+        course_name = next((document.metadata.get("name") for document in vault.read_all([course] if course.is_file() else [])), None)
         exam_link = link("exam", evaluation["exam"], evaluation["path"], alias=evaluation["title"]).replace("|", "\\|")
         course_link_text = link("course", evaluation["course"], course, alias=str(course_name or evaluation["course"])).replace("|", "\\|")
         lines.append(
@@ -347,10 +353,8 @@ def course_slug(document: Document) -> str:
 
 
 def iter_courses(user: Optional[str] = None) -> Iterator[Document]:
-    for path in sorted(courses_dir().glob(f"*/{PREFIXES['course']}*.md")):
-        if path.stem != f"{PREFIXES['course']}{path.parent.name}":
-            continue
-        document = vault.read(path)
+    paths = [path for path in sorted(courses_dir().glob(f"*/{PREFIXES['course']}*.md")) if path.stem == f"{PREFIXES['course']}{path.parent.name}"]
+    for document in vault.read_all(paths):
         if _owned_by(document, user):
             yield document
 
@@ -360,9 +364,44 @@ def last_activity(document: Document) -> Optional[datetime]:
     return vault.parse_time(metadata.get("updated_at")) or vault.parse_time(metadata.get("created_at"))
 
 
+def as_list(value) -> list[str]:
+    """A list property as the tools wrote it, even after a hand edit : a single text (Obsidian's property panel can turn a list
+    into one) is a list of one item, empty items are left out."""
+    if value is None:
+        return []
+    items = value if isinstance(value, list) else [value]
+    return [str(item) for item in items if item is not None and not isinstance(item, (dict, list)) and str(item).strip()]
+
+
+def linked_note(kind: str, target: str, path: Path) -> Optional[Document]:
+    """The note a course links to, or None (with a warning) when it is missing or can't be read : the caller goes on without it."""
+    if not path.is_file():
+        link_or_name(kind, target, path)
+        return None
+    found = vault.read_all([path])
+    return found[0] if found else None
+
+
 def course_skills(course: Document) -> list[str]:
     """The slugs of the skills a course evaluates, in the order they were declared."""
-    return [unlink(skill) for skill in course.metadata.get("skills") or [] if isinstance(skill, str)]
+    return list(dict.fromkeys(unlink(skill) for skill in as_list(course.metadata.get("skills"))))
+
+
+def course_projects(course: Document) -> list[str]:
+    """The slugs of the projects a course builds towards."""
+    return list(dict.fromkeys(unlink(project) for project in as_list(course.metadata.get("projects"))))
+
+
+def link_or_name(kind: str, target: str, path: Path, alias: Optional[str] = None) -> str:
+    """The link to the note of an object, or its link text when the note is missing (deleted or renamed by the student), with a warning.
+    For the places where a missing note must not stop the tool : the link shows as unresolved in Obsidian until the note is back."""
+    if path.is_file():
+        return link(kind, target, path, alias)
+    vault.warn(
+        f"The {kind} note {vault.relative(path)} is missing (deleted or renamed in Obsidian) : the tools kept working without it. "
+        f"Ask the student whether they renamed it (then rename it back) ; otherwise create it again or remove it from the course with edit_course."
+    )
+    return f"[[{path.stem}|{alias}]]" if alias else f"[[{path.stem}]]"
 
 
 def step_prefix(kind: str) -> str:
@@ -450,7 +489,7 @@ def document_course(document: Document) -> str:
 
 def iter_documents(course: str, kind: str) -> Iterator[Document]:
     """The classes or the exams of a course that were given (not only planned), in chronological order : by date, then in the order of the plan."""
-    documents = [vault.read(path) for path in (courses_dir() / course / kind).glob("*.md")]
+    documents = vault.read_all((courses_dir() / course / kind).glob("*.md"))
     documents = [document for document in documents if document.metadata.get("status") not in ("planned", "dropped")]
     documents.sort(
         key=lambda document: (
@@ -542,8 +581,10 @@ def write_project(document: Document, description: str, log: str, notes: str) ->
 
 
 def render_project(project: str) -> None:
-    """Writes the views of a project note again, when the student broke them."""
-    document = get_project(project)
+    """Writes the views of a project note again, when the student broke them. A missing or unreadable project is skipped, with a warning."""
+    document = linked_note("project", project, project_file(project))
+    if document is None:
+        return
     before = document.body
     dashboards.render_project(document)
     if document.body != before:

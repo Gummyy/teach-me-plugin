@@ -20,7 +20,7 @@ def report_card(course: str) -> str:
     document = objects.get_course(course)
     metadata = document.metadata
     grades = objects.skill_grades(objects.unlink(metadata.get("user", "")))
-    skills = [objects.get_skill(skill) for skill in objects.course_skills(document)]
+    skills = [skill for skill in (objects.linked_note("skill", slug, objects.skill_file(slug)) for slug in objects.course_skills(document)) if skill is not None]
     scores = [grades[objects.slug(skill)]["score"] for skill in skills if objects.slug(skill) in grades]
 
     lines = [f"# 🎓 Report card : {metadata.get('name') or course}", "", _cell(metadata.get("subject")), ""]

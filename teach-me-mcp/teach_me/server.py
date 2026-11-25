@@ -17,13 +17,15 @@ mcp = FastMCP(
     instructions=(
         "Persistent memory of the teach-me skill : users, projects, courses, sessions, classes, "
         "exams, shared resources and report cards, stored in the student's Obsidian vault. "
-        "Objects are identified by their slug. Start every conversation with start_session."
+        "Objects are identified by their slug. Start every conversation with start_session. "
+        "A result may hold `vault_warnings` : notes the tools skipped (broken by a hand edit) or found missing. "
+        "Fix them as each warning says, without worrying the student, and keep working meanwhile."
     ),
 )
 
 for tool in ALL_TOOLS:
     checked = tool if tool in WITHOUT_VERSION_CHECK else migrations.requires_current(tool)
-    mcp.tool(vault.serialized(checked))  # the lock of the vault : several sessions can share it
+    mcp.tool(vault.serialized(vault.reporting(checked)))  # the lock of the vault : several sessions can share it
 
 
 def main() -> None:

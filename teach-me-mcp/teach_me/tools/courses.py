@@ -32,10 +32,10 @@ def _progress(course: str) -> dict:
     classes_since = sum(1 for document in objects.iter_documents(course, "classes") if _created(document) > since)
 
     advice, last = [], None
-    corrected = [exam for exam in exams if exam.metadata.get("status") == "corrected" and objects.exam_data(objects.slug(exam)).get("questions")]
+    corrected = [exam for exam in exams if exam.metadata.get("status") == "corrected" and objects.exam_data(objects.slug(exam), strict=False).get("questions")]
     if corrected:
         exam = corrected[-1]
-        grades = [q.get("grade") for q in objects.exam_data(objects.slug(exam))["questions"] if q.get("grade") in quiz.GRADES]
+        grades = [q.get("grade") for q in objects.exam_data(objects.slug(exam), strict=False)["questions"] if q.get("grade") in quiz.GRADES]
         if grades:
             mean = quiz.mean_score(grades)
             shares = {grade: round(grades.count(grade) / len(grades), 2) for grade in quiz.GRADES}
@@ -56,9 +56,13 @@ def _progress(course: str) -> dict:
     return {"classes_since_last_exam": classes_since, "last_corrected_exam": last, "advice": advice}
 
 
-def _project_links(user: str, projects: list[str]) -> list[str]:
+def _project_links(user: str, projects: list[str], missing_ok: bool = False) -> list[str]:
+    """The links to projects of the user. With `missing_ok`, a project whose note is missing keeps its link, with a warning : it was already linked."""
     links = []
     for project in projects:
+        if missing_ok and not objects.project_file(project).is_file():
+            links.append(objects.link_or_name("project", project, objects.project_file(project)))
+            continue
         owner = objects.unlink(objects.get_project(project, user).metadata.get("user", ""))
         if owner != user:
             raise ToolError(f"The project '{project}' belongs to '{owner}', not to '{user}'.")
@@ -149,7 +153,7 @@ def _used_skills(course: str, steps: list[dict]) -> dict[str, list[str]]:
         for skill in step["skills"]:
             used.setdefault(skill, []).append(f"step {step['slug']}")
     for exam in objects.iter_exams(course):
-        for question in objects.exam_data(objects.slug(exam)).get("questions") or []:
+        for question in objects.exam_data(objects.slug(exam), strict=False).get("questions") or []:
             for skill in question.get("skills") or []:
                 used.setdefault(skill, []).append(f"exam {objects.slug(exam)}")
     return {skill: list(dict.fromkeys(places)) for skill, places in used.items()}
@@ -235,15 +239,15 @@ def edit_course(
         if busy:
             raise ToolError(f"These skills are still used : {'; '.join(busy)}. Remove them from the steps first (update_steps) ; a skill evaluated by an exam stays in the course.")
         course_skills = [skill for skill in course_skills if skill not in remove_skills]
-    metadata["skills"] = [objects.link("skill", skill, objects.skill_file(skill)) for skill in course_skills]
+    metadata["skills"] = [objects.link_or_name("skill", skill, objects.skill_file(skill)) for skill in course_skills]
 
-    projects = [objects.unlink(project) for project in metadata.get("projects") or []]
+    projects = objects.course_projects(document)
     for project in remove_projects or []:
         if project not in projects:
             raise ToolError(f"The course isn't linked to the project '{project}'. Its projects : {', '.join(projects) or 'none'}.")
         projects.remove(project)
-    projects += [project for project in add_projects or [] if project not in projects]
-    metadata["projects"] = _project_links(user, projects)
+    added = [project for project in add_projects or [] if project not in projects]
+    metadata["projects"] = _project_links(user, projects, missing_ok=True) + _project_links(user, added)
 
     for slug in remove_steps or []:
         step = plans.find_step(document, slug)
@@ -363,7 +367,7 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         "subject": metadata.get("subject"),
         "starting_level": metadata.get("starting_level"),
         "plan": {"done": len(steps) - len(upcoming), "total": len(steps), "next_steps": upcoming[: plans.NEXT_STEPS]},
-        "projects": [project_summary(objects.unlink(project)) for project in metadata.get("projects") or []],
+        "projects": [project_summary(project) for project in objects.course_projects(document) if objects.linked_note("project", project, objects.project_file(project))],
         "skills": skills,
         "sessions": [{"session": label, "entries": entries} for label, entries in sessions],
         "pending_exams": pending,

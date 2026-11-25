@@ -479,7 +479,13 @@ def ensure_home() -> None:
     """Writes the bases and Home.md, the entry point of the vault, with its views written again if the student broke them."""
     ensure_bases()
     path = home_file()
-    document = vault.read(path) if path.is_file() else Document(path, {"type": "home", "created_at": vault.format_time(vault.now())}, "")
+    if path.is_file():
+        found = vault.read_all([path])
+        if not found:
+            return  # unreadable : skipped with a warning, the student's Home.md is never overwritten
+        document = found[0]
+    else:
+        document = Document(path, {"type": "home", "created_at": vault.format_time(vault.now())}, "")
     body = blocks.ensure_notes(blocks.replace(document.body, HOME_BLOCK, HOME_DASHBOARD, vault.format_session(vault.now()), first=True))
     if body != document.body or document.mtime_ns is None:
         document.body = body

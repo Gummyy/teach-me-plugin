@@ -25,6 +25,8 @@ The tools write some parts of a note themselves, between `%% teach-me:<name> sta
 
 Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps file names unique in the vault, so every link points to exactly one note. The tools only take slugs, without the prefix. Dates live in the frontmatter (`created_at`, and `started_at` once a step was given). Each step of the plan of a course is a note from the moment it is planned : its `order`, `status` (`planned`, then `done` for a class, `assigned`, `filled`, `corrected` for an exam), `description`, `skills` and `importance` are its properties, and `bases/course.base` shows them in the course note.
 
+A note broken by hand never stops the tools : the lists and views skip a note they can't read, a list property typed as a single text is read as a list of one, and a link to a deleted note is kept as it is. The tools then work without it, and add what they skipped to their result as `vault_warnings`, for the model to fix. Only a tool asked for that very note fails, with the way to repair it.
+
 Every file is written atomically (a temporary file renamed over it), so a crash never leaves half a note or half a JSON file. A file holding git merge conflict markers, or a JSON file that can't be read, gives an error naming it and how to restore it.
 
 The vault path is read from the `TEACH_ME_VAULT` environment variable (a relative path is relative to the working directory). The folder is created if it doesn't exist.
