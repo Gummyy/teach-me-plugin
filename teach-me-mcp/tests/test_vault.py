@@ -157,3 +157,41 @@ def test_broken_frontmatter_is_repaired(vault):
         repair_note("users/user-alice.md", "name: Bob")
     with pytest.raises(ToolError, match="no note at '../outside.md'"):
         repair_note("../outside.md", "a: 1")
+
+
+def test_files_are_written_atomically(vault):
+    path = vault / ".teach-me" / "exams" / "quiz.json"
+    vault_module.write_json(path, {"questions": []})
+    vault_module.write_text(vault / "bases" / "course.base", "views: []\n")
+    assert vault_module.read_json(path) == {"questions": []}
+    assert (vault / "bases" / "course.base").read_text(encoding="utf-8") == "views: []\n"
+    assert not list(vault.rglob("*.tmp"))
+    assert vault_module.read_json(vault / "missing.json", {}) == {}
+
+
+def test_a_broken_json_file_names_its_path_and_how_to_restore_it(vault):
+    path = vault / ".teach-me" / "exams" / "quiz.json"
+    path.parent.mkdir(parents=True)
+    path.write_text('{"questions": [', encoding="utf-8")
+    with pytest.raises(ToolError, match=r"\.teach-me/exams/quiz\.json.*git"):
+        vault_module.read_json(path)
+
+
+CONFLICT = "<<<<<<< HEAD\nstatus: done\n=======\nstatus: planned\n>>>>>>> origin/main\n"
+
+
+def test_merge_conflict_markers_are_reported(vault):
+    note = vault / "note.md"
+    note.write_text(f"---\ntitle: Note\n---\n\n{CONFLICT}", encoding="utf-8")
+    with pytest.raises(ToolError, match=r"note\.md.*merge conflict.*git reset --hard @\{u\}"):
+        vault_module.read(note)
+    data = vault / "data.json"
+    data.write_text(CONFLICT, encoding="utf-8")
+    with pytest.raises(ToolError, match="merge conflict"):
+        vault_module.read_json(data)
+
+
+def test_a_line_of_equal_signs_alone_is_not_a_conflict(vault):
+    note = vault / "note.md"
+    note.write_text("---\ntitle: Note\n---\n\nTitle\n=======\n", encoding="utf-8")
+    assert vault_module.read(note).metadata == {"title": "Note"}

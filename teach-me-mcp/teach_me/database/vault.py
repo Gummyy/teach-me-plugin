@@ -6,6 +6,7 @@ Nothing in this module knows about users, courses or exams.
 from __future__ import annotations
 
 import functools
+import json
 import os
 import re
 import time
@@ -210,10 +211,59 @@ def _parse_frontmatter(path: Path, text: str) -> tuple[dict, str]:
     return metadata, body.strip("\n")
 
 
+_CONFLICT = re.compile(r"^<{7}(?:[ \t].*)?$.*?^>{7}(?:[ \t].*)?$", re.MULTILINE | re.DOTALL)
+"""The markers git leaves in a file it couldn't merge : <<<<<<< ours ... ======= ... >>>>>>> theirs."""
+
+
+def merge_conflict(path: Path) -> ToolError:
+    """The error for a file git couldn't merge (Obsidian Git, or a pull on another device)."""
+    return ToolError(
+        f"'{relative(path)}' holds git merge conflict markers (<<<<<<< ... ======= ... >>>>>>>) : the vault was synced from two devices that both changed it. "
+        "Either resolve the conflict in this file (keep one version between the markers and delete the markers), "
+        "or, when nothing of the student's is waiting to be pushed (their answers to an exam above all), reset the vault to the remote version "
+        "(`git fetch` then `git reset --hard @{u}`) and call again the tools of this session that were lost. Tell the student in one sentence what you did."
+    )
+
+
 def read(path: Path) -> Document:
     mtime_ns = path.stat().st_mtime_ns  # before reading : a change during the read is caught by `write`
-    metadata, body = _parse_frontmatter(path, path.read_text(encoding="utf-8"))
+    text = path.read_text(encoding="utf-8")
+    if _CONFLICT.search(text):
+        raise merge_conflict(path)
+    metadata, body = _parse_frontmatter(path, text)
     return Document(path, metadata, body, mtime_ns)
+
+
+def write_text(path: Path, text: str) -> None:
+    """Writes a file atomically : into a temporary file next to it, then renamed over it, so that a crash never leaves a half written file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(text, encoding="utf-8", newline="\n")
+    temporary.replace(path)
+
+
+def read_json(path: Path, default: Any = None) -> Any:
+    """The content of a JSON file of the tools, or `default` when it doesn't exist.
+
+    Raises:
+        ToolError: when the file can't be read, after a merge conflict or a hand edit
+    """
+    if not path.is_file():
+        return default
+    text = path.read_text(encoding="utf-8")
+    if _CONFLICT.search(text):
+        raise merge_conflict(path)
+    try:
+        return json.loads(text)
+    except ValueError as error:
+        raise ToolError(
+            f"'{relative(path)}' isn't valid JSON anymore ({error}) : it was probably edited by hand. "
+            "Restore it from the git history of the vault (`git log -- <file>`, then `git checkout <commit> -- <file>`), then call the tool again."
+        ) from None
+
+
+def write_json(path: Path, data: Any) -> None:
+    write_text(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 def write(document: Document) -> None:
@@ -224,15 +274,11 @@ def write(document: Document) -> None:
     """
     if document.mtime_ns is not None and document.path.is_file() and document.path.stat().st_mtime_ns != document.mtime_ns:
         raise ConflictError(document.path)
-    document.path.parent.mkdir(parents=True, exist_ok=True)
     frontmatter = yaml.safe_dump(
         document.metadata, sort_keys=False, allow_unicode=True, width=10_000
     ).strip()
     body = document.body.strip("\n")
-    text = f"---\n{frontmatter}\n---\n" + (f"\n{body}\n" if body else "")
-    temporary = document.path.with_name(document.path.name + ".tmp")
-    temporary.write_text(text, encoding="utf-8", newline="\n")
-    temporary.replace(document.path)
+    write_text(document.path, f"---\n{frontmatter}\n---\n" + (f"\n{body}\n" if body else ""))
     document.mtime_ns = document.path.stat().st_mtime_ns  # the same document can be written again by the same tool
     written = _written.get()
     if written is not None:

@@ -466,8 +466,7 @@ def ensure_bases(force: bool = False) -> list[str]:
         path = bases_dir() / name
         if path.is_file() and (not force or path.read_text(encoding="utf-8") == content):
             continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8", newline="\n")
+        vault.write_text(path, content)
         written.append(vault.relative(path))
     return written
 

@@ -37,9 +37,7 @@ def version_file() -> Path:
 
 
 def _write_version(version: int) -> None:
-    file = version_file()
-    file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(f"{version}\n", encoding="utf-8", newline="\n")
+    vault.write_text(version_file(), f"{version}\n")
 
 
 def vault_version() -> int:

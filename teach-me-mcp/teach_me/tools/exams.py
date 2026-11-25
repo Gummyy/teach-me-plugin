@@ -11,7 +11,6 @@ model writes the questions, grades them (grade_questions) and explains them.
 A long project exam can be graded in several steps with grade_questions before correct_exam.
 """
 
-import json
 from typing import Literal, Optional
 
 from teach_me.database import dashboards, objects, quiz, vault
@@ -32,17 +31,15 @@ def _grades_file(exam: str):
 
 
 def _read_grades(exam: str) -> dict[int, dict]:
-    file = _grades_file(exam)
-    if not file.is_file():
-        return {}
-    return {int(number): grade for number, grade in json.loads(file.read_text(encoding="utf-8")).items()}
+    return {int(number): grade for number, grade in (vault.read_json(_grades_file(exam), {}) or {}).items()}
 
 
 def _read_solutions(exam: str) -> list:
     file = _solutions_file(exam)
-    if not file.is_file():
+    solutions = vault.read_json(file)
+    if solutions is None:
         raise ToolError(f"The solutions of the exam '{exam}' are missing ({vault.relative(file)}) : it can't be graded.")
-    return json.loads(file.read_text(encoding="utf-8"))
+    return solutions
 
 
 def _question_number(value, questions: list[dict], where: str) -> int:
@@ -110,9 +107,7 @@ def _store_grades(exam: str, grades: list[QuestionGrade]) -> dict[int, dict]:
             raise ToolError(f"Question {number} needs a `grade` among : {', '.join(quiz.GRADES)}.")
         stored[number] = {"grade": grade, "explanation": explanation}
 
-    file = _grades_file(exam)
-    file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(json.dumps({str(n): stored[n] for n in sorted(stored)}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    vault.write_json(_grades_file(exam), {str(n): stored[n] for n in sorted(stored)})
     return stored
 
 
@@ -183,9 +178,7 @@ def create_exam(
     plans.fill(path, metadata, quiz.render_exam(title, intro or "", public, skill_links))
     objects.write_exam_data(exam, {"questions": [_stored(question) for question in public], "skills": {}})
 
-    solutions_file = _solutions_file(exam)
-    solutions_file.parent.mkdir(parents=True, exist_ok=True)
-    solutions_file.write_text(json.dumps(solutions, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    vault.write_json(_solutions_file(exam), solutions)
 
     exam_link = objects.link("exam", exam, path, alias=title)
     objects.append_to_session(course_document, f"Exam {exam_link} assigned ({type}, {len(public)} questions)")
@@ -236,8 +229,7 @@ def read_exam(exam: str) -> dict:
     if document.metadata.get("status") == "assigned" and any(answer is not None for answer in answers):
         _set_status(document, "filled")
         vault.write(document)
-    solutions_file = _solutions_file(exam)
-    solutions = json.loads(solutions_file.read_text(encoding="utf-8")) if solutions_file.is_file() else None
+    solutions = vault.read_json(_solutions_file(exam))
     return {
         "slug": exam,
         "title": document.metadata.get("title"),

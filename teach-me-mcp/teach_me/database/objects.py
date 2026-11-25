@@ -19,7 +19,6 @@ without the prefix.
 
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -219,14 +218,11 @@ def exam_data_file(exam: str) -> Path:
 
 def exam_data(exam: str) -> dict:
     """{"questions": [{"kind", "skills", "options", "grade"}], "skills": {skill: {"grade", "score", "comment"}}, "corrected_at"}, or {} for an exam without data."""
-    file = exam_data_file(exam)
-    return json.loads(file.read_text(encoding="utf-8")) if file.is_file() else {}
+    return vault.read_json(exam_data_file(exam), {})
 
 
 def write_exam_data(exam: str, data: dict) -> None:
-    file = exam_data_file(exam)
-    file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    vault.write_json(exam_data_file(exam), data)
 
 
 def skill_grades(user: str) -> dict[str, dict]:
