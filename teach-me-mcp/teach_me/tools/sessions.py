@@ -68,7 +68,8 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
         steps.append(f"The student hasn't marked as read the classes {titles} : ask them in one sentence whether they went through them, and call update_class with \"read\" for those they did. Never insist.")
     upcoming = state["plan"]["next_steps"]
     if upcoming:
-        steps.append(f"Next step of the plan : the {upcoming[0]['kind']} '{upcoming[0]['title']}' : pass planned=\"{upcoming[0]['slug']}\" to save_class or create_exam.")
+        tool = {"class": "save_class", "quiz": "create_exam", "deliverable": "create_deliverable"}.get(upcoming[0]["kind"], "save_class")
+        steps.append(f"Next step of the plan : the {upcoming[0]['kind']} '{upcoming[0]['title']}' : pass planned=\"{upcoming[0]['slug']}\" to {tool}.")
     elif state["plan"]["done"] == state["plan"]["total"]:
         steps.append("Every step of the plan is done : propose new steps (edit_course `add_steps`), or mark the course finished (edit_course `status`).")
     if state["status"] != "active":

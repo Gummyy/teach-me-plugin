@@ -227,15 +227,15 @@ def test_progress_advice(course):
     for title in ("Convolution", "Kernels", "Padding"):
         save_class(course, title, "", "Content")
     progress = get_course_state(course)["progress"]
-    assert progress["classes_since_last_exam"] == 3
-    assert "propose an exercise" in progress["advice"][0]
+    assert progress["classes_since_last_quiz"] == 3
+    assert "propose a quiz" in progress["advice"][0]
 
     slug = _create(course, [SINGLE, MULTIPLE])["slug"]
     assert "waiting for an answer" in get_course_state(course)["progress"]["advice"][0]
     _correct(slug, ["B", "C"], GRADES[:2])
     progress = get_course_state(course)["progress"]
-    assert progress["classes_since_last_exam"] == 0
-    assert progress["last_corrected_exam"]["mean"] == 1.0
+    assert progress["classes_since_last_quiz"] == 0
+    assert progress["last_corrected_quiz"]["mean"] == 1.0
     assert "re-explain" in progress["advice"][0]
 
 

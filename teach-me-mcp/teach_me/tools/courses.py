@@ -13,8 +13,8 @@ from teach_me.tools.schemas import CourseStatus, PlannedStep, StepUpdate
 from teach_me.tools.skill import check_skills, list_skills
 from teach_me.tools.users import edit_text
 
-CLASSES_BEFORE_EXERCISE = 3
-"""The skill asks for at least one exercise every 3 classes."""
+CLASSES_BEFORE_QUIZ = 3
+"""The skill asks for at least one quiz every 3 classes."""
 TOO_EASY, TOO_HARD, FAILED = 4.5, 3.5, 2.5
 """A good exam : about 50 % of A, 35 % of B and 15 % of C or D, a mean of about 4 out of 5. Above TOO_EASY it was too easy,
 below TOO_HARD too hard, and below FAILED its concepts need to be explained again."""
@@ -24,36 +24,102 @@ def _created(document: Document) -> datetime:
     return vault.parse_time(document.metadata.get("created_at")) or datetime.min
 
 
-def _progress(course: str) -> dict:
-    """Cadence and difficulty, computed from the classes and the corrected exams, so that the teacher doesn't have to keep count."""
-    exams = list(objects.iter_exams(course))
-    last_exam = exams[-1] if exams else None
-    since = _created(last_exam) if last_exam else datetime.min
-    classes_since = sum(1 for document in objects.iter_documents(course, "classes") if _created(document) > since)
+def _difficulty(mean: float, kind: str) -> str:
+    """The advice on the difficulty of the next quiz or deliverable, from the mean of the last one."""
+    if kind == "quiz":
+        if mean < FAILED:
+            return "The last quiz failed : re-explain its concepts, then propose an easier quiz on them."
+        if mean < TOO_HARD:
+            return "The last quiz was too hard : lower the difficulty of the next one."
+        if mean >= TOO_EASY:
+            return "The last quiz was too easy : raise the difficulty of the next one."
+        return "The difficulty of the last quiz was right : keep it."
+    if mean < TOO_HARD:
+        return "The last deliverable was too hard : give the next one an easier difficulty (smaller milestones, more detailed criteria)."
+    if mean >= TOO_EASY:
+        return "The last deliverable was too easy : give the next one a harder difficulty (bigger milestones, criteria on the result only)."
+    return "The difficulty of the last deliverable was right : keep it."
 
-    advice, last = [], None
-    corrected = [exam for exam in exams if objects.is_corrected(exam)]
+
+def active_deliverable(course: Document) -> Optional[dict]:
+    """The deliverable of a course in progress, with where it stands, or None."""
+    found = [
+        exam
+        for exam in objects.iter_exams(objects.course_slug(course))
+        if objects.is_deliverable(exam) and objects.exam_status(exam) in objects.ACTIVE_DELIVERABLE
+    ]
+    if not found:
+        return None
+    exam = found[-1]
+    facts = objects.exam_facts(exam)
+    data = objects.exam_data(objects.slug(exam), strict=False)
+    checkins = data.get("checkins") or []
+    sessions = objects.parse_sessions(course.body)
+    last = vault.parse_time(checkins[-1].get("date")) if checkins else None
+    shown = facts["shown"]
+    return {
+        "slug": objects.slug(exam),
+        "title": exam.metadata.get("title"),
+        "path": vault.relative(exam.path),
+        "project": objects.unlink(exam.metadata.get("project") or "") or None,
+        "status": facts["status"],
+        "sessions": {"used": shown["sessions"], "total": shown["max_sessions"], "left": max(shown["max_sessions"] - shown["sessions"], 0)},
+        "milestones": shown["milestones"],
+        "milestones_done": shown["milestones_done"],
+        "next_goal": shown["next_goal"],
+        "days_since_last_checkin": (vault.now() - last).days if last else None,
+        "checked_in_this_session": bool(checkins and sessions and checkins[-1].get("session") == sessions[-1][0]),
+    }
+
+
+def _progress(course: Document) -> dict:
+    """Cadence and difficulty, computed from the classes, the quizzes and the deliverables, so that the teacher doesn't have to keep count.
+    A deliverable runs alongside the classes and the quizzes : it never blocks them, and its difficulty is advised on its own."""
+    slug = objects.course_slug(course)
+    exams = list(objects.iter_exams(slug))
+    quizzes = [exam for exam in exams if not objects.is_deliverable(exam)]
+    built = [exam for exam in exams if objects.is_deliverable(exam)]
+    since = _created(quizzes[-1]) if quizzes else datetime.min
+    classes_since = sum(1 for document in objects.iter_documents(slug, "classes") if _created(document) > since)
+
+    advice, last_quiz, last_deliverable = [], None, None
+    corrected = [exam for exam in quizzes if objects.is_corrected(exam)]
     if corrected:
         exam = corrected[-1]
         grades = [q.get("grade") for q in objects.exam_data(objects.slug(exam), strict=False).get("questions") or [] if q.get("grade") in quiz.GRADES]
         if grades:
             mean = quiz.mean_score(grades)
             shares = {grade: round(grades.count(grade) / len(grades), 2) for grade in quiz.GRADES}
-            last = {"slug": objects.slug(exam), "title": exam.metadata.get("title"), "mean": mean, "shares": shares}
-            if mean < FAILED:
-                advice.append("The last exam failed : re-explain its concepts, then propose an easier exercise on them.")
-            elif mean < TOO_HARD:
-                advice.append("The last exam was too hard : lower the difficulty of the next one.")
-            elif mean >= TOO_EASY:
-                advice.append("The last exam was too easy : raise the difficulty of the next one.")
-            else:
-                advice.append("The difficulty of the last exam was right : keep it.")
-    pending = [exam for exam in exams if objects.exam_status(exam) in ("assigned", "filled")]
+            last_quiz = {"slug": objects.slug(exam), "title": exam.metadata.get("title"), "mean": mean, "shares": shares}
+            advice.append(_difficulty(mean, "quiz"))
+    graded = [exam for exam in built if objects.is_corrected(exam)]
+    if graded:
+        exam = graded[-1]
+        facts = objects.exam_facts(exam)
+        last_deliverable = {"slug": objects.slug(exam), "title": exam.metadata.get("title"), "status": facts["status"], "mean": facts["mean"]}
+        if facts["mean"] is not None:
+            advice.append(_difficulty(facts["mean"], "deliverable"))
+        else:
+            advice.append("The last deliverable was abandoned : ask the student why, then give the next one the guided difficulty, with a small first milestone.")
+    pending = [exam for exam in quizzes if objects.exam_status(exam) in ("assigned", "filled")]
     if pending:
-        advice.append(f"{len(pending)} exam(s) waiting for an answer or a correction : deal with them before creating a new one.")
-    elif classes_since >= CLASSES_BEFORE_EXERCISE:
-        advice.append(f"{classes_since} classes since the last exercise : propose an exercise before the next class.")
-    return {"classes_since_last_exam": classes_since, "last_corrected_exam": last, "advice": advice}
+        advice.append(f"{len(pending)} quiz(zes) waiting for an answer or a correction : deal with them before creating a new one.")
+    elif classes_since >= CLASSES_BEFORE_QUIZ:
+        advice.append(f"{classes_since} classes since the last quiz : propose a quiz before the next class.")
+    running = active_deliverable(course)
+    if running and running["status"] == "submitted":
+        advice.append(
+            f"The deliverable '{running['title']}' used every session of its budget : look at the work (read_deliverable), then grade it with correct_deliverable, "
+            "or extend it once with checkin_deliverable `extend` if the student needs more time and agrees."
+        )
+    elif running and not running["checked_in_this_session"]:
+        number = running["sessions"]["used"] + 1
+        when = f", the last one {running['days_since_last_checkin']} day(s) ago" if running["days_since_last_checkin"] is not None else ""
+        advice.append(
+            f"Deliverable '{running['title']}' in progress : check-in {number}/{running['sessions']['total']} is due this session{when}. "
+            f"Ask the student to show their work (files, repo, a demo), then call checkin_deliverable. Their goal was : {running['next_goal']}"
+        )
+    return {"classes_since_last_quiz": classes_since, "last_corrected_quiz": last_quiz, "last_deliverable": last_deliverable, "advice": advice}
 
 
 def _project_links(user: str, projects: list[str], missing_ok: bool = False) -> list[str]:
@@ -334,12 +400,13 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
             "projects": [{"slug", "name", "description", "last_progress"}],
             "skills": [{"slug", "name", "description", "grade", "score"}], the grade coming from the exams of all the courses,
             "sessions": [{"session", "entries"}], the last sessions, most recent first,
-            "plan": {"done", "total", "next_steps"} : the number of steps done, and the next steps not started yet ({"slug", "kind", "title", "description", "skills", "importance", "progress"}) : pass the slug of the one you do as `planned` to save_class or create_exam. The whole plan is in the course note,
-            "pending_exams": exams whose status is "assigned" or "filled",
+            "plan": {"done", "total", "next_steps"} : the number of steps done, and the next steps not started yet ({"slug", "kind", "title", "description", "skills", "importance", "progress"}) : pass the slug of the one you do as `planned` to save_class, create_exam or create_deliverable. The whole plan is in the course note,
+            "pending_exams": quizzes whose status is "assigned" or "filled",
+            "active_deliverable": the deliverable in progress, or null : {"slug", "title", "path", "project", "status", "sessions" ({"used", "total", "left"}), "milestones", "milestones_done", "next_goal", "days_since_last_checkin", "checked_in_this_session"}. It runs alongside the classes and quizzes : check in once per session,
             "classes_to_read": classes the student hasn't marked as read yet : [{"slug", "title", "path", "started_at"}]. Mark them with update_class once they went through them,
             "new_resources": shared resources the student hasn't looked at yet : [{"slug", "title", "url" or "file", "status", "session", "step"}],
             "resources_to_discuss": resources the student marked as seen or wrote notes about, in Obsidian : the same, with their "notes". Ask them what they thought, in one sentence, when the topic of the day allows it,
-            "progress": {"classes_since_last_exam", "last_corrected_exam" ({"slug", "title", "mean", "shares"}), "advice"} : what to do next, computed from the classes and the exams,
+            "progress": {"classes_since_last_quiz", "last_corrected_quiz" ({"slug", "title", "mean", "shares"}), "last_deliverable" ({"slug", "title", "status", "mean"}), "advice"} : what to do next, computed from the classes, the quizzes and the deliverables,
         }
     """
     document = objects.get_course(course)
@@ -355,10 +422,13 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
             "path": vault.relative(exam.path),
         }
         for exam in objects.iter_exams(course)
-        if objects.exam_status(exam) in ("assigned", "filled")
+        if not objects.is_deliverable(exam) and objects.exam_status(exam) in ("assigned", "filled")
     ]
+    running = active_deliverable(document)
     steps = plans.with_progress(course, plans.course_plan(document))
-    upcoming = [step for step in steps if step["progress"] == "planned"]  # the steps in progress are in pending_exams and classes_to_read
+    upcoming = [step for step in steps if step["progress"] == "planned"]  # the steps in progress are in pending_exams, active_deliverable and classes_to_read
+    if running:  # one deliverable at a time : the next one waits
+        upcoming = [step for step in upcoming if step["kind"] != "deliverable"]
     resources = [shared.summary(document) for document in objects.iter_resources(course)]
     to_discuss = [resource for resource in resources if resource["status"] == "seen" or (resource["status"] == "new" and resource.get("notes"))]
     return {
@@ -372,6 +442,7 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         "skills": skills,
         "sessions": [{"session": label, "entries": entries} for label, entries in sessions],
         "pending_exams": pending,
+        "active_deliverable": running,
         "classes_to_read": [
             {"slug": objects.slug(lesson), "title": lesson.metadata.get("title"), "path": vault.relative(lesson.path), "started_at": lesson.metadata.get("started_at")}
             for lesson in objects.iter_documents(course, "classes")
@@ -379,5 +450,5 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         ],
         "new_resources": [resource for resource in resources if resource["status"] == "new" and not resource.get("notes")],
         "resources_to_discuss": to_discuss,
-        "progress": _progress(course),
+        "progress": _progress(document),
     }

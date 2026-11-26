@@ -340,3 +340,73 @@ def test_correct_deliverable_checks_its_arguments(clock, course, grades, showcas
     with pytest.raises(ToolError, match=message):
         correct_deliverable("first-cnn", grades, showcase)
     assert objects.exam_data("first-cnn")["corrected_at"] is None
+
+
+def _advice(course):
+    return get_course_state(course)["progress"]["advice"]
+
+
+def test_a_deliverable_runs_alongside_the_course(clock, course):
+    from teach_me.tools import edit_course, save_class
+
+    edit_course(course, add_steps=[{"kind": "deliverable", "title": "Pet detector", "description": "", "skills": ["convolution"], "importance": "core"}])
+    _deliverable(course)
+    state = get_course_state(course)
+    assert state["pending_exams"] == []  # a deliverable never blocks the quizzes
+    assert state["active_deliverable"] == {
+        "slug": "first-cnn",
+        "title": "First CNN",
+        "path": "courses/computer-vision/exams/deliverable-first-cnn.md",
+        "project": "pet-classifier",
+        "status": "assigned",
+        "sessions": {"used": 0, "total": 3, "left": 3},
+        "milestones": 3,
+        "milestones_done": 0,
+        "next_goal": "For check-in 1 : A dataset of pets",
+        "days_since_last_checkin": None,
+        "checked_in_this_session": False,
+    }
+    assert "pet-detector" not in [step["slug"] for step in state["plan"]["next_steps"]]  # one deliverable at a time
+    assert "check-in 1/3 is due this session" in _advice(course)[0]
+    for title in ("Kernels", "Padding", "Strides"):
+        save_class(course, title, "", "Content")
+    assert any("3 classes since the last quiz" in line for line in _advice(course))  # the deliverable doesn't count as a quiz
+    _checkin()
+    assert not any("is due this session" in line for line in _advice(course))
+    clock.next(hours=48)
+    from teach_me.tools import start_session
+
+    advice = start_session("terminal", "alice", course)["course"]["progress"]["advice"]  # a new session
+    assert any("check-in 2/3 is due this session, the last one 2 day(s) ago" in line for line in advice)
+
+
+def test_the_advice_asks_for_the_grading_of_a_submitted_deliverable(clock, course):
+    _deliverable(course, max_sessions=1, milestones=[DATASET])
+    _checkin()
+    assert any("used every session of its budget" in line for line in _advice(course))
+
+
+@pytest.mark.parametrize(
+    "grades, advice",
+    [
+        (["A", "A", "A"], "The last deliverable was too easy"),
+        (["B", "C", "C"], "The last deliverable was too hard"),
+        (["A", "B", "B"], "The difficulty of the last deliverable was right"),
+        (["C", "abandoned", "abandoned"], "The last deliverable was abandoned"),
+    ],
+)
+def test_the_difficulty_of_deliverables_is_advised_on_its_own(clock, course, grades, advice):
+    quiz = _create(course, planned="convolution-quiz")["slug"]
+    _correct(quiz, ["A", "A, B", "x"], GRADES)
+    _deliverable(course)
+    correct_deliverable("first-cnn", [_grade(number, grade) for number, grade in enumerate(grades, 1)], SHOWCASE)
+    progress = get_course_state(course)["progress"]
+    assert progress["advice"][0] == "The last quiz was too easy : raise the difficulty of the next one."
+    assert progress["advice"][1].startswith(advice) and progress["last_deliverable"]["slug"] == "first-cnn"
+
+
+def test_start_session_points_to_create_deliverable(clock, course):
+    from teach_me.tools import edit_course, start_session
+
+    edit_course(course, remove_steps=["convolution", "convolution-quiz", "cnn-architectures"])
+    assert 'pass planned="first-cnn" to create_deliverable' in start_session("terminal", "alice", course)["next_step"]
