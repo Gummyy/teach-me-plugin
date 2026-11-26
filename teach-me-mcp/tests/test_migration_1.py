@@ -67,7 +67,7 @@ def test_each_step_of_the_plan_is_a_note(migrated):
         ("exams/quiz-convolution-quiz.md", 2, "corrected", ""),
         ("classes/class-pooling.md", 3, "read", "Max pooling."),
         ("classes/class-cnn-architectures.md", 4, "planned", ""),
-        ("exams/exercise-first-cnn.md", 5, "planned", "Train a CNN on the pictures"),
+        ("exams/deliverable-first-cnn.md", 5, "planned", "Train a CNN on the pictures"),  # a planned project exam, a deliverable since migration 6
     ]
     for path, order, status, description in expected:
         metadata = note(f"courses/computer-vision/{path}").metadata
@@ -76,7 +76,7 @@ def test_each_step_of_the_plan_is_a_note(migrated):
     assert "summary" not in lesson and lesson["started_at"] == lesson["created_at"]
     assert lesson["suggested_resources"] == ["3Blue1Brown on convolutions"] and lesson["skills"] == ["[[skill-convolution]]"]
     assert note("courses/computer-vision/classes/class-pooling.md").metadata["added"] is True
-    assert note("courses/computer-vision/exams/exercise-first-cnn.md").metadata["type"] == "exercise"
+    assert note("courses/computer-vision/exams/deliverable-first-cnn.md").metadata["type"] == "deliverable"
     assert get_course_state("computer-vision")["plan"]["done"] == 3
 
 
