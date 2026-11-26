@@ -74,7 +74,7 @@ def test_the_vault_gets_its_views(course, vault):
     start_session("app", user="alice")
     assert "![[home.base#Courses]]" in vault_io.read(vault / "Home.md").body
     body = objects.get_course(course).body
-    for view in ("Last steps", "Next steps", "Plan", "Skills", "Exams", "Projects", "Resources"):
+    for view in ("Last steps", "Next steps", "Deliverables", "Plan", "Skills", "Exams", "Projects", "Resources"):
         assert f"![[course.base#{view}]]" in body
 
 
@@ -97,3 +97,18 @@ def test_a_project_note_shows_its_courses_and_skills(course, vault):
     vault_io.write(document)
     start_session("app", user="alice", course=course)
     assert "![[project.base#Courses]]" in vault_io.read(path).body
+
+
+def test_the_deliverables_show_in_the_course_the_project_and_home(course, vault):
+    from teach_me.tools import create_deliverable
+    from tests.test_deliverables import MILESTONES
+
+    create_deliverable(course, "First CNN", "Pitch.", "A CNN", "pet-classifier", "standard", 3, MILESTONES, planned="first-cnn")
+    assert "![[home.base#Deliverables in progress]]" in vault_io.read(vault / "Home.md").body
+    assert "![[project.base#Deliverables]]" in objects.get_project("pet-classifier").body
+    base = yaml.safe_load(dashboards.PROJECT_BASE)
+    view = next(view for view in base["views"] if view["name"] == "Deliverables")
+    assert "'file.hasLink(this.file)'" in dashboards.PROJECT_BASE and view["order"][0] == "formula.deliverable"
+    metadata = vault_io.read(vault / "courses/computer-vision/exams/deliverable-first-cnn.md").metadata
+    for column in view["order"][1:]:  # every column of the views is a property of the note
+        assert column in metadata, column

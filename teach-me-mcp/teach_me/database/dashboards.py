@@ -3,9 +3,9 @@
     bases/course.base     the views of a course, embedded in its note : `this` is the course note,
                           its folder holds the notes of its steps and resources, and it links to its skills and projects
     bases/project.base    the views of a project, embedded in its note : `this` is the project note,
-                          the courses linking to it, and the skills of these courses
-    bases/home.base       the views of Home.md, across the courses : exams to answer, last steps,
-                          resources to look at, skills to work on, projects
+                          the courses linking to it, the skills of these courses, and its deliverables
+    bases/home.base       the views of Home.md, across the courses : quizzes to answer, deliverables in
+                          progress, last steps, resources to look at, skills to work on, projects
 
 A course note starts with a generated block embedding these views (see `blocks.py`), then the
 student's "My notes" section, then the session log. A project note starts with its own block, then
@@ -22,7 +22,7 @@ from teach_me.database import blocks, vault
 from teach_me.database.vault import Document
 
 COURSE_BLOCK = "dashboard"
-STEP_TYPES = ("class", "quiz", "exercise")
+STEP_TYPES = ("class", "quiz", "deliverable")
 
 _STEPS_FILTER = "\n".join(f"            - 'type == \"{kind}\"'" for kind in STEP_TYPES)
 
@@ -36,8 +36,8 @@ formulas:
   skill: 'file.asLink(name)'
   project: 'file.asLink(name)'
   where: 'if(url, url, file)'
-  kind: 'if(type == "class", "📖 class", if(type == "quiz", "❓ quiz", "🛠️ project"))'
-  progress: 'if(status == "read" || status == "done" || status == "corrected", "✅ done", if(status == "planned", "⏳ planned", if(status == "new", "📖 to read", "✍️ " + status)))'
+  kind: 'if(type == "class", "📖 class", if(type == "quiz", "❓ quiz", "📦 deliverable"))'
+  progress: 'if(status == "read" || status == "done" || status == "corrected", "✅ done", if(status == "abandoned", "🏳️ abandoned", if(status == "planned", "⏳ planned", if(status == "new", "📖 to read", "✍️ " + status))))'
 summaries:
   Evaluated: 'values.filter(value).mean().round(2)'
 properties:
@@ -79,6 +79,20 @@ properties:
     displayName: Last evaluated
   note.mean:
     displayName: Mean
+  note.project:
+    displayName: Project
+  note.sessions:
+    displayName: Check-ins
+  note.max_sessions:
+    displayName: Out of
+  note.milestones_done:
+    displayName: Milestones done
+  note.milestones:
+    displayName: Milestones
+  note.next_goal:
+    displayName: Next goal
+  note.showcase:
+    displayName: What you built
 views:
   - type: table
     name: Plan
@@ -112,6 +126,8 @@ views:
             - 'status == "new"'
             - 'status == "assigned"'
             - 'status == "filled"'
+            - 'status == "in progress"'
+            - 'status == "submitted"'
     sort:
       - property: order
         direction: ASC
@@ -164,7 +180,7 @@ views:
 {_IN_COURSE}
         - or:
             - 'type == "quiz"'
-            - 'type == "exercise"'
+            - 'type == "deliverable"'
         - 'status != "planned"'
         - 'status != "dropped"'
     sort:
@@ -178,6 +194,28 @@ views:
       - mean
     summaries:
       mean: Evaluated
+  - type: table
+    name: Deliverables
+    filters:
+      and:
+{_IN_COURSE}
+        - 'type == "deliverable"'
+        - 'status != "planned"'
+        - 'status != "dropped"'
+    sort:
+      - property: started_at
+        direction: ASC
+    order:
+      - formula.step
+      - project
+      - status
+      - milestones_done
+      - milestones
+      - sessions
+      - max_sessions
+      - next_goal
+      - mean
+      - showcase
   - type: list
     name: Projects
     filters:
@@ -212,6 +250,7 @@ PROJECT_BASE = """# Written by teach-me : the views of a project, embedded in it
 formulas:
   course: 'file.asLink(name)'
   skill: 'file.asLink(name)'
+  deliverable: 'file.asLink(title)'
   courses: 'file.backlinks.filter(value.asFile().properties.type == "course" && value.asFile().hasLink(this.file))'
 summaries:
   Evaluated: 'values.filter(value).mean().round(2)'
@@ -238,6 +277,20 @@ properties:
     displayName: Progression
   note.last_evaluated:
     displayName: Last evaluated
+  formula.deliverable:
+    displayName: Deliverable
+  note.course:
+    displayName: Course
+  note.mean:
+    displayName: Mean
+  note.sessions:
+    displayName: Check-ins
+  note.max_sessions:
+    displayName: Out of
+  note.next_goal:
+    displayName: Next goal
+  note.showcase:
+    displayName: What you built
 views:
   - type: table
     name: Courses
@@ -272,6 +325,26 @@ views:
       - last_evaluated
     summaries:
       score: Evaluated
+  - type: table
+    name: Deliverables
+    filters:
+      and:
+        - 'type == "deliverable"'
+        - 'file.hasLink(this.file)'
+        - 'status != "planned"'
+        - 'status != "dropped"'
+    sort:
+      - property: started_at
+        direction: ASC
+    order:
+      - formula.deliverable
+      - course
+      - status
+      - sessions
+      - max_sessions
+      - next_goal
+      - mean
+      - showcase
 """
 
 HOME_BASE = """# Written by teach-me : the views of Home.md, across all the courses of the vault.
@@ -294,6 +367,12 @@ properties:
     displayName: Score
   note.progression:
     displayName: Progression
+  note.sessions:
+    displayName: Check-ins
+  note.max_sessions:
+    displayName: Out of
+  note.next_goal:
+    displayName: Next goal
 views:
   - type: table
     name: Courses
@@ -309,9 +388,7 @@ views:
     name: Exams to answer
     filters:
       and:
-        - or:
-            - 'type == "quiz"'
-            - 'type == "exercise"'
+        - 'type == "quiz"'
         - or:
             - 'status == "assigned"'
             - 'status == "filled"'
@@ -323,6 +400,25 @@ views:
       - course
       - status
       - started_at
+  - type: table
+    name: Deliverables in progress
+    filters:
+      and:
+        - 'type == "deliverable"'
+        - or:
+            - 'status == "assigned"'
+            - 'status == "in progress"'
+            - 'status == "submitted"'
+    sort:
+      - property: started_at
+        direction: ASC
+    order:
+      - formula.name
+      - course
+      - status
+      - sessions
+      - max_sessions
+      - next_goal
   - type: table
     name: Classes to read
     filters:
@@ -345,7 +441,7 @@ views:
         - or:
             - 'type == "class"'
             - 'type == "quiz"'
-            - 'type == "exercise"'
+            - 'type == "deliverable"'
         - 'status != "planned"'
         - 'status != "dropped"'
     sort:
@@ -408,6 +504,12 @@ Next steps :
 
 A class stays *new* until you read it : then set its status to *read*, here or in its note.
 
+## 📦 Deliverables
+
+What you build for your projects, on your own, between the sessions : show your progress at each session.
+
+![[course.base#Deliverables]]
+
 ## 🗺️ Plan
 
 ![[course.base#Plan]]
@@ -440,7 +542,13 @@ The courses that work on this project.
 
 What these courses teach, and where you stand.
 
-![[project.base#Skills]]"""
+![[project.base#Skills]]
+
+## 📦 Deliverables
+
+What you built for this project.
+
+![[project.base#Deliverables]]"""
 """The views at the top of a project note."""
 
 HOME_BLOCK = "home"
@@ -453,6 +561,10 @@ HOME_DASHBOARD = """# 🏠 Home
 ## Exams to answer
 
 ![[home.base#Exams to answer]]
+
+## Deliverables in progress
+
+![[home.base#Deliverables in progress]]
 
 ## Classes to read
 
