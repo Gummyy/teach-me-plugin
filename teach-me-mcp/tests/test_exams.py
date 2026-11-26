@@ -34,8 +34,8 @@ GRADES = [
 ]
 
 
-def _create(course, questions=(SINGLE, MULTIPLE, OPEN), title="Convolution quiz", type="quiz", **kwargs):
-    return create_exam(course, title, type, list(questions), **kwargs)
+def _create(course, questions=(SINGLE, MULTIPLE, OPEN), title="Convolution quiz", **kwargs):
+    return create_exam(course, title, list(questions), **kwargs)
 
 
 def _grades(user):
@@ -76,14 +76,11 @@ def test_create_exam_renders_the_questions_and_hides_the_solutions(course, vault
     assert "convolution-quiz" not in [step["slug"] for step in state["plan"]["next_steps"]]  # in progress : in pending_exams
 
 
-def test_exam_slugs_are_unique_across_quizzes_and_project_exams(course, vault):
+def test_exam_slugs_are_unique(course, vault):
     _create(course, planned="convolution-quiz")
-    exercise = _create(course, [OPEN], type="project", project="pet-classifier")
-    assert exercise["slug"] == "convolution-quiz-2" and exercise["path"].endswith("/exams/exercise-convolution-quiz-2.md")
-    assert vault_io.read(vault / exercise["path"]).metadata["project"] == "[[project-pet-classifier]]"
-    assert vault_io.read(vault / exercise["path"]).metadata["type"] == "exercise"
-    with pytest.raises(ToolError, match="Unknown project 'nope'"):
-        _create(course, [OPEN], type="project", project="nope")
+    again = _create(course, [OPEN])
+    assert again["slug"] == "convolution-quiz-2" and again["path"].endswith("/exams/quiz-convolution-quiz-2.md")
+    assert objects.exam_data(again["slug"])["type"] == "quiz"
 
 
 @pytest.mark.parametrize(
@@ -225,14 +222,6 @@ def test_a_second_correction_never_removes_the_first_one(course, vault):
     assert _grades("alice") == {"convolution": {"grade": "A", "score": 5.0, "history": ["A"]}}  # only the latest take counts
 
 
-def test_project_exams_weigh_twice_a_quiz(course):
-    quiz = _create(course, [SINGLE])["slug"]
-    exercise = _create(course, [SINGLE], title="Exercise", type="project")["slug"]
-    _correct(quiz, ["B"], GRADES[:1])  # D : 1
-    _correct(exercise, ["A"], GRADES[:1])  # A : 5, twice
-    assert _grades("alice")["convolution"] == {"grade": "B", "score": 3.67, "history": ["D", "A"]}
-
-
 def test_progress_advice(course):
     assert get_course_state(course)["progress"]["advice"] == []
     for title in ("Convolution", "Kernels", "Padding"):
@@ -279,18 +268,18 @@ def test_correct_exam_grades_in_one_call(course):
 def test_correct_exam_completes_the_grades_given_before(course):
     slug = _create(course, [{**OPEN, "text": "First"}, {**OPEN, "text": "Second"}])["slug"]
     submit_answers(slug, ["a", "b"])
-    grade_questions(slug, [{**GRADES[2], "question": 1}])  # a long project exam, graded in several steps
+    grade_questions(slug, [{**GRADES[2], "question": 1}])  # a long quiz, graded in several steps
     with pytest.raises(ToolError, match=r"question\(s\) 2 have no grade"):
         correct_exam(slug, grades=[{**GRADES[2], "question": 1, "grade": "C"}])
     assert correct_exam(slug, grades=[{**GRADES[2], "question": 2, "grade": "A"}])["grades"] == ["C", "A"]
 
 
 def test_planned_exam_must_match_its_step(course):
-    with pytest.raises(ToolError, match="'convolution-quiz' is a quiz, not a project"):
-        _create(course, [OPEN], type="project", planned="convolution-quiz")
+    with pytest.raises(ToolError, match="'first-cnn' is a deliverable, not a quiz"):
+        _create(course, [OPEN], planned="first-cnn")
     with pytest.raises(ToolError, match="Unknown step 'nope'.*convolution-quiz \\(quiz\\)"):
         _create(course, planned="nope")
-    exam = _create(course, [SINGLE], title="First CNN", type="project", planned="first-cnn")
-    assert exam["warnings"] == ["The plan expected this exam to evaluate cnn-architecture too : evaluate them in a later exam, or update the step with edit_course."]
+    exam = _create(course, [SINGLE], planned="convolution-quiz")
+    assert exam["warnings"] == []
     with pytest.raises(ToolError, match="already has its document"):
-        _create(course, [SINGLE], title="Again", type="project", planned="first-cnn")
+        _create(course, [SINGLE], title="Again", planned="convolution-quiz")

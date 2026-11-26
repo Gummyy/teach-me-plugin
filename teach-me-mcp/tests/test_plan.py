@@ -16,12 +16,12 @@ def note(vault, stem):
 
 
 def test_each_step_is_a_planned_note(course, vault):
-    stems = ["class-convolution", "quiz-convolution-quiz", "class-cnn-architectures", "exercise-first-cnn"]
+    stems = ["class-convolution", "quiz-convolution-quiz", "class-cnn-architectures", "deliverable-first-cnn"]
     for order, stem in enumerate(stems, 1):
         metadata = note(vault, stem).metadata
         assert metadata["order"] == order and metadata["status"] == "planned" and metadata["course"] == "[[course-computer-vision]]"
-    last = note(vault, "exercise-first-cnn")
-    assert last.metadata["type"] == "exercise" and last.metadata["description"] == "Train a CNN on the pictures"
+    last = note(vault, "deliverable-first-cnn")
+    assert last.metadata["type"] == "deliverable" and last.metadata["description"] == "Train a CNN on the pictures"
     assert last.metadata["skills"] == ["[[skill-convolution]]", "[[skill-cnn-architecture]]"] and last.metadata["importance"] == "core"
     assert "> [!todo] Planned" in last.body
     assert "![[course.base#Next steps]]" in objects.get_course(course).body
@@ -42,7 +42,7 @@ def test_create_course_checks_the_plan(course):
     created = create_course("alice", "Subject", "", ["convolution", "cnn-architecture"], plan=[*classes, PLAN[1]], name="Other")
     assert created["warnings"] == [
         "No exam of the plan evaluates the skills cnn-architecture : add exams for them, or add them to the skills of planned exams.",
-        "4 classes in a row without an exam (class-0 → class-3) : plan an exercise at least every 3 classes.",
+        "4 classes in a row without a quiz (class-0 → class-3) : plan a quiz at least every 3 classes.",
     ]
     assert created["plan"][4]["slug"] == "convolution-quiz-2"  # the slugs planned by the other courses are taken
 
@@ -62,7 +62,7 @@ def test_a_document_outside_the_plan_is_added_with_a_warning(course, vault):
     padding = note(vault, "class-padding").metadata
     assert padding["added"] is True and padding["order"] == 2 and padding["status"] == "new"
     assert note(vault, "quiz-convolution-quiz").metadata["order"] == 3
-    exam = create_exam(course, "Surprise", "quiz", [QUESTION])
+    exam = create_exam(course, "Surprise", [QUESTION])
     assert "wasn't in the plan" in exam["warnings"][0]
     assert plans.course_plan(objects.get_course(course))[2]["skills"] == ["convolution"]
 
@@ -98,8 +98,8 @@ def test_edit_course_changes_the_plan_step_by_step(course, vault):
     assert edited["plan"][3]["title"] == "My first CNN" and edited["plan"][3]["progress"] == "planned"
     assert edited["skills"] == ["convolution", "cnn-architecture", "pooling"]
     assert edited["warnings"] == [] and edited["replaced"] == {}
-    assert note(vault, "exercise-first-cnn").metadata["title"] == "My first CNN"
-    assert [note(vault, stem).metadata["order"] for stem in ("class-cnn-architectures", "class-convolution", "class-pooling", "exercise-first-cnn")] == [1, 2, 3, 4]
+    assert note(vault, "deliverable-first-cnn").metadata["title"] == "My first CNN"
+    assert [note(vault, stem).metadata["order"] for stem in ("class-cnn-architectures", "class-convolution", "class-pooling", "deliverable-first-cnn")] == [1, 2, 3, 4]
     assert not (vault / "courses/computer-vision/exams/quiz-convolution-quiz.md").exists()  # nothing was written in it
 
 
@@ -112,7 +112,7 @@ def test_a_removed_step_the_student_wrote_in_is_dropped(course, vault):
 
 
 def test_the_skills_of_an_exam_given_are_its_questions(course):
-    create_exam(course, "Convolution quiz", "quiz", [QUESTION], planned="convolution-quiz")
+    create_exam(course, "Convolution quiz", [QUESTION], planned="convolution-quiz")
     with pytest.raises(ToolError, match="already given"):
         edit_course(course, update_steps=[{"step": "convolution-quiz", "skills": ["cnn-architecture"]}])
 

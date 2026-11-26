@@ -143,7 +143,7 @@ def create_course(
     dashboards.render_course(document)
     vault.write(document)
     plans.write_plan(slug, steps)
-    return {"slug": slug, "plan": plans.with_progress(slug, steps), "warnings": plans.warnings(steps, course_skills)}
+    return {"slug": slug, "plan": plans.with_progress(slug, steps), "warnings": plans.warnings(steps, course_skills, bool(project_links))}
 
 
 def _used_skills(course: str, steps: list[dict]) -> dict[str, list[str]]:
@@ -290,7 +290,7 @@ def edit_course(
         "skills": course_skills,
         "projects": projects,
         "plan": plans.with_progress(course, steps),
-        "warnings": plans.warnings(steps, course_skills),
+        "warnings": plans.warnings(steps, course_skills, bool(projects)),
         "replaced": replaced,
     }
 

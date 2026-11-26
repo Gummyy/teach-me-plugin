@@ -19,8 +19,8 @@ def _set(path, key, value):
     path.write_text(changed, encoding="utf-8")
 
 
-def _corrected(course, vault, type="quiz", planned="convolution-quiz"):
-    exam = _create(course, type=type, planned=planned)
+def _corrected(course, vault, planned="convolution-quiz"):
+    exam = _create(course, planned=planned)
     submit_answers(exam["slug"], ["A", "A, B", "Convolutions then a dense layer"])
     correct_exam(exam["slug"], GRADES)
     return exam["slug"], vault / exam["path"]
@@ -65,9 +65,9 @@ def test_a_grade_or_a_mean_changed_by_hand_is_restored(course, vault):
 
 
 def test_the_hidden_data_holds_the_type_and_is_written_first(course, vault):
-    exam, _ = _corrected(course, vault, type="project", planned="first-cnn")
+    exam, _ = _corrected(course, vault)
     data = objects.exam_data(exam)
-    assert data["type"] == "project" and data["corrected_at"]
+    assert data["type"] == "quiz" and data["corrected_at"]
 
 
 def test_a_retake_counts_once_corrected_again(course, vault):
@@ -86,7 +86,7 @@ def test_a_healthy_vault_is_not_rewritten(course, vault):
 
 
 def test_migration_3_gives_the_exams_their_type(course, vault):
-    exam, path = _corrected(course, vault, type="project", planned="first-cnn")
+    exam, path = _corrected(course, vault)
     file = objects.exam_data_file(exam)
     data = json.loads(file.read_text(encoding="utf-8"))
     del data["type"]
@@ -95,6 +95,6 @@ def test_migration_3_gives_the_exams_their_type(course, vault):
     (vault / ".teach-me" / "version").write_text("2\n")
     result = migrate_vault()
     assert result["to"] == migrations.current_version()
-    assert objects.exam_data(exam)["type"] == "project"
+    assert objects.exam_data(exam)["type"] == "quiz"
     assert vault_io.read(path).metadata["status"] == "corrected"
     assert any(change.endswith(": type") for change in result["changes"])

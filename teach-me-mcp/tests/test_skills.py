@@ -64,8 +64,8 @@ def test_edit_skill(course):
 
 def test_a_skill_shared_by_two_courses_has_one_history(course):
     second = create_course("alice", "Image processing", "", ["convolution"], name="Image processing", plan=ONE_STEP)["slug"]
-    first_exam = create_exam(course, "First", "quiz", [QUESTION])["slug"]
-    second_exam = create_exam(second, "Second", "quiz", [QUESTION])["slug"]
+    first_exam = create_exam(course, "First", [QUESTION])["slug"]
+    second_exam = create_exam(second, "Second", [QUESTION])["slug"]
     for exam, answer in ((first_exam, "B"), (second_exam, "A")):
         submit_answers(exam, [answer])
         grade_questions(exam, [{"question": 1, "explanation": "."}])

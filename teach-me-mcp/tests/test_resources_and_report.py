@@ -90,7 +90,7 @@ def test_report_card(course, vault):
     assert "**0/2** skills evaluated" in empty and "No exam yet." in empty
 
     question = {"kind": "single", "text": "?", "skills": ["convolution"], "options": ["Yes", "No"], "correct_options": ["A"]}
-    slug = create_exam(course, "Quiz | 1", "quiz", [question, question])["slug"]
+    slug = create_exam(course, "Quiz | 1", [question, question])["slug"]
     submit_answers(slug, ["A", "B"])
     grade_questions(slug, [{"question": 1, "explanation": "."}, {"question": 2, "explanation": "."}])
     correct_exam(slug)

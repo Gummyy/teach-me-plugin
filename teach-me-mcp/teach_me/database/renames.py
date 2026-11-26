@@ -32,7 +32,7 @@ from teach_me.errors import ToolError
 HOME = "Home"
 """The id of Home.md."""
 TOP_FOLDERS = {"user": "users", "project": "projects", "skill": "skills"}
-COURSE_FOLDERS = {"class": "classes", "quiz": "exams", "exercise": "exams", "resource": "resources"}
+COURSE_FOLDERS = {"class": "classes", "quiz": "exams", "deliverable": "exams", "exercise": "exams", "resource": "resources"}
 """The folder of each kind of note of a course, inside the folder of the course."""
 PASSES = (("home", "user", "project", "skill", "course"), tuple(COURSE_FOLDERS))
 """The courses are put back first : the notes of a course are found through it."""

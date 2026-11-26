@@ -9,7 +9,7 @@ PLAN = [
     {"kind": "class", "title": "Convolution", "description": "Kernels and feature maps", "skills": ["convolution"], "importance": "core"},
     {"kind": "quiz", "title": "Convolution quiz", "description": "", "skills": ["convolution"], "importance": "core"},
     {"kind": "class", "title": "CNN architectures", "description": "", "skills": ["cnn-architecture"], "importance": "core"},
-    {"kind": "project", "title": "First CNN", "description": "Train a CNN on the pictures", "skills": ["convolution", "cnn-architecture"], "importance": "core"},
+    {"kind": "deliverable", "title": "First CNN", "description": "Train a CNN on the pictures", "skills": ["convolution", "cnn-architecture"], "importance": "core"},
 ]
 """The plan of the computer-vision course."""
 

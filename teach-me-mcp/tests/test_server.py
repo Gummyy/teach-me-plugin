@@ -56,7 +56,7 @@ def test_a_planned_course_through_the_client(vault):
             edited = await client.call_tool("edit_course", {"course": "vision", "update_steps": [{"step": "kernels-quiz", "move_after": "", "importance": "optional"}]})
             await client.call_tool("save_class", {"course": "vision", "title": "Kernels", "summary": "", "content": "A class", "planned": "kernels"})
             await client.call_tool("update_class", {"course": "vision", "slug": "kernels", "status": "read"})
-            exam = await client.call_tool("create_exam", {"course": "vision", "title": "Kernels quiz", "type": "quiz", "questions": [question], "planned": "kernels-quiz"})
+            exam = await client.call_tool("create_exam", {"course": "vision", "title": "Kernels quiz", "questions": [question], "planned": "kernels-quiz"})
             await client.call_tool("submit_answers", {"exam": "kernels-quiz", "answers": ["A small matrix"]})
             corrected = await client.call_tool("correct_exam", {"exam": "kernels-quiz", "grades": [{"question": 1, "grade": "A", "explanation": "Right"}]})
             state = await client.call_tool("get_course_state", {"course": "vision"})

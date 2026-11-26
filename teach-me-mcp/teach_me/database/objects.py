@@ -6,10 +6,10 @@
     courses/<course>/course-<course>.md            (links to its skills and projects, the views of the course and the session log)
     courses/<course>/classes/class-<class>.md       (every step of the plan is a note, from the moment it is planned)
     courses/<course>/exams/quiz-<exam>.md          (questions, solutions and grades in .teach-me/)
-    courses/<course>/exams/exercise-<exam>.md      (project exams)
+    courses/<course>/exams/deliverable-<exam>.md   (milestones of a project, built over several sessions : see `deliverable.py`)
     courses/<course>/resources/resource-<resource>.md
 
-Every note has an `id` property (its file name, see `renames.py`) and a `type` property (user, project, skill, course, class, quiz, exercise, resource, or home for Home.md), and the
+Every note has an `id` property (its file name, see `renames.py`) and a `type` property (user, project, skill, course, class, quiz, deliverable, resource, or home for Home.md), and the
 notes of a course a `course` property linking to it, so that Obsidian Bases can select them.
 
 Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps the file names
@@ -25,20 +25,28 @@ from pathlib import Path
 from typing import Iterable, Iterator, Optional, Union
 
 from teach_me.database import blocks, dashboards, quiz, vault
+from teach_me.database import deliverable as deliverables
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 
 SESSION_TIMEOUT = timedelta(hours=3)
 """A new session starts when the last activity on a course is older than this."""
 SESSION_HEADING = re.compile(r"^## (\d{4}-\d{2}-\d{2} \d{2}:\d{2})[ \t]*$", re.MULTILINE)
-STEP_FOLDERS = {"class": "classes", "quiz": "exams", "project": "exams"}
+LEGACY = "project"
+"""The project exams (notes `exercise-<exam>.md`) of the vaults before migration 6, which turns them into quizzes. The tools can't create them
+anymore, but understand them, so that the migrations before 6 still run."""
+STEP_FOLDERS = {"class": "classes", "quiz": "exams", "deliverable": "exams", LEGACY: "exams"}
 """Folder of the document of each kind of step of a plan."""
-EXAM_TYPES = ("quiz", "project")
+EXAM_TYPES = ("quiz", "deliverable")
 EXAM_STATUSES = ("assigned", "filled", "corrected")
-EXAM_COEFFICIENTS = {"quiz": 1, "project": 2}
-"""Weight of the questions of each type of exam in the grade of a skill."""
-EXAM_NOTE_TYPES = {"quiz": "quiz", "project": "exercise"}
-"""The `type` property of the note of each type of exam : a project exam is an exercise, 'project' is the type of the project notes."""
+DELIVERABLE_STATUSES = ("assigned", "in progress", "submitted", "corrected", "abandoned")
+"""assigned : the subject is given. in progress : one check-in done. submitted : every session of its budget used, waiting for its correction.
+corrected : graded. abandoned : graded, but at least half of its milestones were abandoned."""
+ACTIVE_DELIVERABLE = ("assigned", "in progress", "submitted")
+EXAM_COEFFICIENTS = {"quiz": 1, "deliverable": 3, LEGACY: 2}
+"""Weight of the questions of each type of exam in the grade of a skill : a milestone of a deliverable weighs 3 questions of a quiz."""
+EXAM_NOTE_TYPES = {"quiz": "quiz", "deliverable": "deliverable", LEGACY: "exercise"}
+"""The `type` property of the note of each type of exam : a project exam was an exercise, 'project' is the type of the project notes."""
 RESOURCE_STATUSES = ("new", "seen", "discussed", "dropped")
 CLASS_STATUSES = ("new", "read")
 """A class is new when save_class writes it, and read once the student went through it : they set it in Obsidian, or tell the teacher, who calls update_class."""
@@ -57,10 +65,11 @@ PREFIXES = {
     "course": "course-",
     "class": "class-",
     "quiz": "quiz-",
+    "deliverable": "deliverable-",
     "exercise": "exercise-",
     "resource": "resource-",
 }
-EXAM_PREFIXES = {"quiz": PREFIXES["quiz"], "project": PREFIXES["exercise"]}
+EXAM_PREFIXES = {"quiz": PREFIXES["quiz"], "deliverable": PREFIXES["deliverable"], LEGACY: PREFIXES["exercise"]}
 """File prefix of each type of exam. 'project-' is taken by the projects."""
 HINTS = {
     "user": "Use the slug returned by list_users or create_user.",
@@ -68,7 +77,7 @@ HINTS = {
     "skill": "Create it first with create_skills.",
     "course": "Use the slug returned by list_courses or create_course.",
     "class": "Use the slug returned by save_class.",
-    "exam": "Use the slug returned by create_exam.",
+    "exam": "Use the slug returned by create_exam or create_deliverable.",
 }
 
 
@@ -130,14 +139,21 @@ def slug(document: Union[Document, Path]) -> str:
 
 
 def note_exam_type(document: Document) -> str:
-    """The type of an exam, "quiz" or "project", as the `type` of its note says."""
-    return "project" if document.metadata.get("type") in (EXAM_NOTE_TYPES["project"], "project") else "quiz"
+    """The type of an exam, "quiz" or "deliverable" (or the legacy "project"), as the `type` of its note says."""
+    note_type = document.metadata.get("type")
+    if note_type == EXAM_NOTE_TYPES["deliverable"]:
+        return "deliverable"
+    return LEGACY if note_type in (EXAM_NOTE_TYPES[LEGACY], "project") else "quiz"
 
 
 def exam_type(document: Document) -> str:
-    """The type of an exam, "quiz" or "project" : from its hidden data, the note only shows it."""
+    """The type of an exam, "quiz" or "deliverable" : from its hidden data, the note only shows it."""
     data_type = exam_data(slug(document), strict=False).get("type")
-    return data_type if data_type in EXAM_TYPES else note_exam_type(document)
+    return data_type if data_type in EXAM_NOTE_TYPES else note_exam_type(document)
+
+
+def is_deliverable(document: Document) -> bool:
+    return exam_type(document) == "deliverable"
 
 
 # The hidden data of an exam (.teach-me/exams/<exam>.json) is the source of truth : the properties of its note
@@ -146,21 +162,23 @@ def exam_type(document: Document) -> str:
 
 
 def exam_facts(document: Document) -> Optional[dict]:
-    """What the hidden data of an exam says about it : {"type", "status", "mean", "questions", "skills"}, or None for an exam
-    not given yet (a planned step) or without data. Assigned or filled comes from the answers in the note."""
+    """What the hidden data of an exam says about it : {"type", "status", "mean", "skills", "shown"}, `shown` being the other properties
+    of its note, or None for an exam not given yet (a planned step) or without data. Assigned or filled comes from the answers in the note."""
     data = exam_data(slug(document), strict=False)
     questions = data.get("questions") or []
     if not questions:
         return None
-    kind = data.get("type") if data.get("type") in EXAM_TYPES else note_exam_type(document)
+    kind = data.get("type") if data.get("type") in EXAM_NOTE_TYPES else note_exam_type(document)
+    skills = list(dict.fromkeys(skill for question in questions for skill in question.get("skills") or []))
+    if kind == "deliverable":
+        return {"type": kind, "skills": skills, **deliverables.facts(data)}
     grades = [question.get("grade") for question in questions]
     if data.get("corrected_at") and all(grade in quiz.GRADES for grade in grades):
         status, mean = "corrected", quiz.mean_score(grades)
     else:
         answered = any(answer is not None for answer in quiz.parse_answers(document.body, questions))
         status, mean = ("filled" if answered else "assigned"), None
-    skills = list(dict.fromkeys(skill for question in questions for skill in question.get("skills") or []))
-    return {"type": kind, "status": status, "mean": mean, "questions": len(questions), "skills": skills}
+    return {"type": kind, "status": status, "mean": mean, "skills": skills, "shown": {"questions": len(questions)}}
 
 
 def exam_status(document: Document) -> Optional[str]:
@@ -169,8 +187,13 @@ def exam_status(document: Document) -> Optional[str]:
     return facts["status"] if facts else document.metadata.get("status")
 
 
+GRADED = ("corrected", deliverables.ABANDONED)
+"""The statuses of a graded exam : the milestones graded in an abandoned deliverable count for their skills."""
+
+
 def is_corrected(document: Document) -> bool:
-    return exam_status(document) == "corrected"
+    """Whether an exam was graded : a corrected exam, or an abandoned deliverable."""
+    return exam_status(document) in GRADED
 
 
 def show_exam_facts(document: Document) -> list[str]:
@@ -182,7 +205,7 @@ def show_exam_facts(document: Document) -> list[str]:
         "type": EXAM_NOTE_TYPES[facts["type"]],
         "status": facts["status"],
         "skills": [link_or_name("skill", skill, skill_file(skill)) for skill in facts["skills"]],
-        "questions": facts["questions"],
+        **facts["shown"],
         "mean": facts["mean"],
     }
     changed = [key for key, value in wanted.items() if document.metadata.get(key) != value]
@@ -299,7 +322,7 @@ def skill_grades(user: str) -> dict[str, dict]:
     """Grade of each skill of a user : {"grade", "score", "history", "evaluations"}.
 
     The score is the weighted mean of the grades of every question that evaluates the skill, in the
-    corrected exams of all the courses (a project exam weighs twice a quiz), and the grade is the letter
+    corrected exams of all the courses (a milestone of a deliverable weighs 3 questions of a quiz), and the grade is the letter
     closest to it. The history holds the grade of the skill in each exam, in chronological order, and
     the evaluations the details of each : {"exam", "path", "title", "course", "date", "grade", "score", "comment"}.
     """

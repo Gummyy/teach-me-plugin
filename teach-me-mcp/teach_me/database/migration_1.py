@@ -18,6 +18,8 @@ CONTENT_HEADING = "## Content"
 """The section that listed the classes and exams of a course before the plans (teach-me 0.1)."""
 PLAN_HEADING = "## Plan"
 """The section that showed the plan of a course as a table (teach-me 0.2)."""
+STEP_KINDS = ("class", "quiz", objects.LEGACY)
+"""The kinds of steps of the plans of teach-me 0.2 : a project exam was a step of kind `project`."""
 
 
 def _front(metadata: dict, first: dict) -> dict:
@@ -121,7 +123,7 @@ def _legacy_plan(course: Document) -> list[dict]:
     links = re.findall(r"\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]", course.body[bounds[0]:bounds[1]])
     steps = []
     for stem, alias in dict.fromkeys((stem.strip(), alias.strip() or None) for stem, alias in links):
-        kind = next((kind for kind in plans.STEP_KINDS if stem.startswith(objects.step_prefix(kind))), None)
+        kind = next((kind for kind in STEP_KINDS if stem.startswith(objects.step_prefix(kind))), None)
         if kind is not None:
             steps.append({"slug": stem[len(objects.step_prefix(kind)):], "kind": kind, "title": alias or stem, "description": "", "skills": [], "importance": "core"})
     return steps
@@ -133,7 +135,7 @@ def plan_notes() -> list[str]:
     for course in objects.iter_courses():
         slug = objects.course_slug(course)
         if "plan" in course.metadata:
-            steps = [dict(step) for step in course.metadata.get("plan") or [] if isinstance(step, dict) and step.get("kind") in plans.STEP_KINDS]
+            steps = [dict(step) for step in course.metadata.get("plan") or [] if isinstance(step, dict) and step.get("kind") in STEP_KINDS]
         else:
             steps = _legacy_plan(course)
         known = {objects.step_file(slug, step) for step in steps}

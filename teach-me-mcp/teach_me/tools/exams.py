@@ -1,6 +1,6 @@
-"""Creating, answering, grading and correcting exams.
+"""Creating, answering, grading and correcting quizzes.
 
-An exam is a list of questions : open (the student writes the answer), single choice or multiple
+A quiz is a list of questions : open (the student writes the answer), single choice or multiple
 choices. Each question evaluates one or more skills. The tools render the exam file, keep the
 solutions hidden, propose a grade for the closed questions and compute the grade of each skill : the
 model writes the questions, grades them (grade_questions) and explains them.
@@ -8,10 +8,11 @@ model writes the questions, grades them (grade_questions) and explains them.
     answers in the chat : create_exam -> submit_answers -> correct_exam
     answers in the vault : create_exam -> read_exam -> correct_exam
 
-A long project exam can be graded in several steps with grade_questions before correct_exam.
+A long quiz can be graded in several steps with grade_questions before correct_exam. The deliverables, built over
+several sessions, have their own tools (`deliverables.py`).
 """
 
-from typing import Literal, Optional
+from typing import Optional
 
 from teach_me.database import dashboards, objects, quiz, vault
 from teach_me.database import plan as plans
@@ -50,6 +51,8 @@ def _question_number(value, questions: list[dict], where: str) -> int:
 
 def _data(document: Document) -> dict:
     data = objects.exam_data(objects.slug(document))
+    if data.get("type") == "deliverable":
+        raise ToolError(f"'{objects.slug(document)}' is a deliverable, not a quiz : use read_deliverable, checkin_deliverable and correct_deliverable.")
     if not data.get("questions"):
         raise ToolError(f"The exam '{objects.slug(document)}' was created by an older version of teach-me, without structured questions : it can't be read or corrected with this tool.")
     return data
@@ -115,31 +118,25 @@ def _store_grades(exam: str, grades: list[QuestionGrade]) -> dict[int, dict]:
 def create_exam(
     course: str,
     title: str,
-    type: Literal["quiz", "project"],
     questions: list[Question],
     intro: Optional[str] = None,
-    project: Optional[str] = None,
     planned: Optional[str] = None,
 ) -> dict:
-    """Creates an exam with the status "assigned" and writes it in the vault, ready to be answered. Its progress shows in the plan of the course.
+    """Creates a quiz with the status "assigned" and writes it in the vault, ready to be answered. Its progress shows in the plan of the course. For the work on a project, over several sessions, use create_deliverable.
 
     The tool numbers the questions, labels the options A, B, C, ... and keeps the solutions hidden from the student.
 
     Args:
         course (str): The slug of the course
-        title (str): The title of the exam
-        type (Literal["quiz", "project"]): "quiz" for a quick check of knowledge, "project" for a practical exercise on the student's project (usually open questions). The questions of a project exam weigh twice as much in the grades of the skills.
+        title (str): The title of the quiz
         questions (list[Question]): The questions, in order. Each evaluates one or more skills of the course, given by their slugs
         intro (Optional[str]): A short context shown before the questions, in markdown. Defaults to None.
-        project (Optional[str]): For a project exam, the slug of the project it builds towards. Defaults to None.
-        planned (Optional[str]): The slug of the quiz or project step of the plan this exam is, from get_course_state's `plan.next_steps`. Leave it out only for an exam the plan didn't foresee : it is then added to the plan, with a warning. Defaults to None.
+        planned (Optional[str]): The slug of the quiz step of the plan this quiz is, from get_course_state's `plan.next_steps`. Leave it out only for a quiz the plan didn't foresee : it is then added to the plan, with a warning. Defaults to None.
 
     Returns:
         dict: {"slug", "path", "questions", "warnings"} : the slug of the exam, its path relative to the vault, the number of questions, and the warnings (an exam outside the plan, planned skills it doesn't evaluate)
     """
     course_document = objects.get_course(course)
-    if type not in objects.EXAM_TYPES:
-        raise ToolError(f"Unknown exam type '{type}'. Use one of : {', '.join(objects.EXAM_TYPES)}.")
     if not (title or "").strip():
         raise ToolError("The exam needs a non empty `title`.")
     title = title.strip()
@@ -153,36 +150,34 @@ def create_exam(
 
     warnings = []
     if planned is not None:
-        step = plans.planned_step(course_document, planned, type)
+        step = plans.planned_step(course_document, planned, "quiz")
         missing = [skill for skill in step["skills"] if skill not in skills]
         if missing:
             warnings.append(f"The plan expected this exam to evaluate {', '.join(missing)} too : evaluate them in a later exam, or update the step with edit_course.")
     else:
-        step, warning = plans.add_unplanned(course_document, type, title, (intro or "").strip()[:200], skills)
+        step, warning = plans.add_unplanned(course_document, "quiz", title, (intro or "").strip()[:200], skills)
         warnings.append(warning)
     path = objects.step_file(course, step)
     exam = objects.slug(path)
     label = objects.current_session(course_document)
     moment = vault.format_time(vault.now())
-    metadata = {"title": title, "status": "assigned", "session": label}
-    if project is not None:
-        metadata["project"] = objects.link("project", project, objects.project_file(project))
-    metadata.update(
-        {
-            "skills": [objects.link("skill", skill, objects.skill_file(skill)) for skill in skills],
-            "questions": len(public),
-            "mean": None,
-            "started_at": moment,
-            "updated_at": moment,
-        }
-    )
+    metadata = {
+        "title": title,
+        "status": "assigned",
+        "session": label,
+        "skills": [objects.link("skill", skill, objects.skill_file(skill)) for skill in skills],
+        "questions": len(public),
+        "mean": None,
+        "started_at": moment,
+        "updated_at": moment,
+    }
     plans.fill(path, metadata, quiz.render_exam(title, intro or "", public, skill_links))
-    objects.write_exam_data(exam, {"type": type, "questions": [_stored(question) for question in public], "skills": {}})
+    objects.write_exam_data(exam, {"type": "quiz", "questions": [_stored(question) for question in public], "skills": {}})
 
     vault.write_json(_solutions_file(exam), solutions)
 
     exam_link = objects.link("exam", exam, path, alias=title)
-    objects.append_to_session(course_document, f"Exam {exam_link} assigned ({type}, {len(public)} questions)")
+    objects.append_to_session(course_document, f"Exam {exam_link} assigned (quiz, {len(public)} questions)")
     dashboards.render_course(course_document)
     vault.write(course_document)
     return {"slug": exam, "path": vault.relative(path), "questions": len(public), "warnings": warnings}
@@ -251,7 +246,7 @@ def read_exam(exam: str) -> dict:
 
 
 def grade_questions(exam: str, grades: list[QuestionGrade]) -> dict:
-    """Grades some questions of an exam, before correct_exam : only useful to grade a long project exam in several steps, otherwise give the grades to correct_exam directly. Can be called several times : grading a question again replaces its grade. The grades stay hidden until correct_exam.
+    """Grades some questions of an exam, before correct_exam : only useful to grade a long quiz in several steps, otherwise give the grades to correct_exam directly. Can be called several times : grading a question again replaces its grade. The grades stay hidden until correct_exam.
 
     Every question needs an explanation. Open questions need a grade. Closed questions take the grade proposed by read_exam when you leave it out, but you can change it (e.g. B instead of A when the question was trivial for the options ticked). An unanswered question always gets E.
 

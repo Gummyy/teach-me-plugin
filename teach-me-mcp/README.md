@@ -14,10 +14,11 @@ vault/
     ├── course-<course>.md             # links to its skills and projects, the views of the course (bases/course.base), the student's notes and the session log
     ├── classes/class-<class>.md       # a step of the plan : created as planned, filled by save_class
     ├── resources/resource-<resource>.md  # a shared resource : its link and status, the student's notes
-    └── exams/quiz-<exam>.md           # or exercise-<exam>.md for a project exam : questions, solutions and grades in .teach-me/
+    └── exams/quiz-<exam>.md           # a quiz : questions, solutions and grades in .teach-me/
+        exams/deliverable-<exam>.md    # a deliverable : the milestones of a project, the student's work, the check-ins
 ```
 
-Every note has an `id` property, its file name when the tools created it (`skill-convolution`), and a `type` property (`user`, `project`, `skill`, `course`, `class`, `quiz`, `exercise`, `resource` or `home`), and the notes of a course a `course` property linking to it, so that Obsidian Bases can select them.
+Every note has an `id` property, its file name when the tools created it (`skill-convolution`), and a `type` property (`user`, `project`, `skill`, `course`, `class`, `quiz`, `deliverable`, `resource` or `home`), and the notes of a course a `course` property linking to it, so that Obsidian Bases can select them.
 
 Properties are flat (text, numbers, dates, lists of links) : Obsidian's property panel shows a nested value as raw JSON, and Bases can't read it. What only the tools need (the questions of an exam, its solutions, the grades of its questions and skills) is in `.teach-me/exams/`, `.teach-me/solutions/` and `.teach-me/grades/`.
 
@@ -25,7 +26,7 @@ The hidden data of an exam (`.teach-me/exams/<exam>.json` : its type, questions,
 
 The tools write some parts of a note themselves, between `%% teach-me:<name> start %%` and `%% teach-me:<name> end <hash> %%` (hidden in reading view), and rewrite them when their data changes. The rest of the note belongs to the student. When the student edited a generated part, their version moves to the `## ✏️ My notes` section of the note before the part is rewritten.
 
-Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps file names unique in the vault, so every link points to exactly one note. The tools only take slugs, without the prefix. Dates live in the frontmatter (`created_at`, and `started_at` once a step was given). Each step of the plan of a course is a note from the moment it is planned : its `order`, `status` (`planned`, then `new` and `read` for a class, `assigned`, `filled`, `corrected` for an exam), `description`, `skills` and `importance` are its properties, and `bases/course.base` shows them in the course note.
+Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps file names unique in the vault, so every link points to exactly one note. The tools only take slugs, without the prefix. Dates live in the frontmatter (`created_at`, and `started_at` once a step was given). Each step of the plan of a course is a note from the moment it is planned : its `order`, `status` (`planned`, then `new` and `read` for a class, `assigned`, `filled`, `corrected` for a quiz, `assigned`, `in progress`, `submitted`, then `corrected` or `abandoned` for a deliverable), `description`, `skills` and `importance` are its properties, and `bases/course.base` shows them in the course note.
 
 A note broken by hand never stops the tools : the lists and views skip a note they can't read, a list property typed as a single text is read as a list of one, and a link to a deleted note is kept as it is. The tools then work without it, and add what they skipped to their result as `vault_warnings`, for the model to fix. Only a tool asked for that very note fails, with the way to repair it.
 
@@ -40,7 +41,7 @@ The vault path is read from the `TEACH_ME_VAULT` environment variable (a relativ
 | Path                           | Content                                                                |
 | ------------------------------ | ---------------------------------------------------------------------- |
 | `teach_me/server.py`           | The FastMCP server : registers the tools. `main()` is the `teach-me-mcp` command |
-| `teach_me/tools/`              | The 28 tools, as plain functions (docstrings are what the model reads), run one at a time under the lock of the vault |
+| `teach_me/tools/`              | The 30 tools, as plain functions (docstrings are what the model reads), run one at a time under the lock of the vault |
 | `teach_me/database/vault.py`   | Markdown files, frontmatter, slugs, checked links, time                |
 | `teach_me/database/objects.py` | Where each object lives in the vault, course content, session log, skill grades |
 | `teach_me/database/blocks.py`  | The parts of a note the tools generate, and the student's "My notes" section where their edits of a generated part move |
@@ -48,6 +49,7 @@ The vault path is read from the `TEACH_ME_VAULT` environment variable (a relativ
 | `teach_me/database/renames.py` | The notes renamed or moved in Obsidian, put back where their `id` says |
 | `teach_me/database/dashboards.py` | The Obsidian bases of the vault, and the views at the top of the course notes. `tests/test_dashboards.py` checks their structure, but only Obsidian tells whether a view renders : see below |
 | `teach_me/database/quiz.py`    | Exam files, answers, the A-E grades                                    |
+| `teach_me/database/deliverable.py` | Deliverables : milestones, the student's work, check-ins, statuses |
 | `teach_me/database/migrations.py` | The version of the vault and the migrations to the current format. `main()` is the `teach-me-migrate` command |
 | `teach_me/database/migration_<n>.py` | What migration `n` changes in the notes of a vault at version `n - 1` |
 | `teach_me/vault/`              | The `teach-vault` command of the `teach-them` skill, and the frontmatter and wikilink parsing shared with the tools |

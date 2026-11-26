@@ -1,20 +1,21 @@
 """The plan of a course : the sequence of its classes and exams, thought through when the course is created.
 
 Every step of the plan is a note of its own, created when the step is planned, in the folder of its
-kind : `classes/class-<slug>.md`, `exams/quiz-<slug>.md` or `exams/exercise-<slug>.md`. Its properties
+kind : `classes/class-<slug>.md`, `exams/quiz-<slug>.md` or `exams/deliverable-<slug>.md`. Its properties
 hold the plan, so that an Obsidian base shows it (see `dashboards.py`) :
 
-    type : class | quiz | exercise    course : [[course-<course>]]    order : 1, 2, ...
+    type : class | quiz | deliverable    course : [[course-<course>]]    order : 1, 2, ...
     title, description, skills (links), importance : core | optional, status,
     added : true (a document created outside the plan), suggested_resources (titles and URLs)
 
-A planned step has the status `planned` and a placeholder body. save_class and create_exam fill the
-note of their step : a class is then `new`, and `read` once the student went through it, an exam
-`assigned`, `filled` and `corrected`. A step
+A planned step has the status `planned` and a placeholder body. save_class, create_exam and create_deliverable
+fill the note of their step : a class is then `new`, and `read` once the student went through it, a quiz
+`assigned`, `filled` and `corrected`, a deliverable `assigned`, `in progress`, `submitted`, then `corrected` or `abandoned`. A step
 removed from the plan is deleted when nothing was written in it, and `dropped` otherwise.
 
-Inside the tools, a step is a dict : {"slug", "kind" : class | quiz | project, "title", "description",
-"skills", "importance", "resources", "added"}.
+Inside the tools, a step is a dict : {"slug", "kind" : class | quiz | deliverable, "title", "description",
+"skills", "importance", "resources", "added"}. The kind `project` (notes `exercise-<slug>.md`) only exists in the vaults
+before migration 6, which turns these steps into quizzes or deliverables.
 """
 
 from __future__ import annotations
@@ -25,17 +26,19 @@ from teach_me.database import blocks, objects, vault
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 
-STEP_KINDS = ("class", "quiz", "project")
+STEP_KINDS = ("class", "quiz", "deliverable")
+"""The kinds of the steps the model can plan."""
 IMPORTANCES = ("core", "optional")
 COURSE_STATUSES = ("active", "finished", "abandoned")
 PROGRESS = ("planned", "in progress", "done")
-"""planned : nothing done yet. in progress : a class not read yet, an exam waiting for answers or for its correction. done : a class read, an exam corrected."""
+"""planned : nothing done yet. in progress : a class not read yet, an exam waiting for answers or for its correction, a deliverable being built.
+done : a class read, an exam corrected (or a deliverable abandoned)."""
 CLASSES_PER_EXAM = 3
-"""The skill asks for at least one exam every 3 classes."""
+"""The skill asks for at least one quiz every 3 classes : a deliverable runs alongside the classes, it doesn't count."""
 NEXT_STEPS = 3
 """The number of steps to come returned with the state of a course."""
 PLANNED, DROPPED = "planned", "dropped"
-NOTE_TYPES = {"class": "class", "quiz": objects.EXAM_NOTE_TYPES["quiz"], "project": objects.EXAM_NOTE_TYPES["project"]}
+NOTE_TYPES = {"class": "class", **objects.EXAM_NOTE_TYPES}
 """The `type` of the note of each kind of step."""
 KINDS = {note_type: kind for kind, note_type in NOTE_TYPES.items()}
 PLACEHOLDER_BLOCK = "planned"
@@ -97,7 +100,7 @@ def status_progress(kind: str, status: Optional[str]) -> str:
         return "planned"
     if kind == "class":
         return "done" if objects.class_is_read(status) else "in progress"
-    return "done" if status == "corrected" else "in progress"
+    return "done" if status in objects.GRADED else "in progress"
 
 
 def progress(course: str, step: dict) -> str:
@@ -175,9 +178,11 @@ def check_step_skills(skills: list, course_skills: list[str], where: str) -> lis
     return slugs
 
 
-def warnings(steps: list[dict], course_skills: list[str]) -> list[str]:
-    """What a good plan should have : every skill evaluated by an exam, and an exam at least every 3 classes."""
+def warnings(steps: list[dict], course_skills: list[str], projects: bool = False) -> list[str]:
+    """What a good plan should have : every skill evaluated by an exam, a quiz at least every 3 classes, and deliverables for the projects."""
     found = []
+    if projects and not any(step["kind"] == "deliverable" for step in steps):
+        found.append("The plan has no deliverable : plan the milestones of the projects as deliverables, started early enough to run alongside the classes.")
     exams = [step for step in steps if step["kind"] != "class"]
     evaluated = {skill for step in exams for skill in step["skills"]}
     missing = [skill for skill in course_skills if skill not in evaluated]
@@ -188,11 +193,12 @@ def warnings(steps: list[dict], course_skills: list[str]) -> list[str]:
             found.append(f"The exam '{step['slug']}' evaluates no skill : give it the skills its questions will evaluate.")
     run: list[str] = []
     for step in [*steps, None]:
-        if step is not None and step["kind"] == "class":
-            run.append(step["slug"])
+        if step is not None and step["kind"] != "quiz":
+            if step["kind"] == "class":
+                run.append(step["slug"])
             continue
         if len(run) > CLASSES_PER_EXAM:
-            found.append(f"{len(run)} classes in a row without an exam ({run[0]} → {run[-1]}) : plan an exercise at least every {CLASSES_PER_EXAM} classes.")
+            found.append(f"{len(run)} classes in a row without a quiz ({run[0]} → {run[-1]}) : plan a quiz at least every {CLASSES_PER_EXAM} classes.")
         run = []
     return found
 
@@ -217,7 +223,7 @@ def insert(steps: list[dict], new: list[dict], after: Optional[str]) -> list[dic
 
 def placeholder(kind: str) -> str:
     """The body of the note of a planned step, until the step comes. What it is about is in its properties."""
-    what = {"class": "This class", "quiz": "This quiz", "project": "This project exercise"}[kind]
+    what = {"class": "This class", "quiz": "This quiz", "deliverable": "This deliverable", objects.LEGACY: "This project exercise"}[kind]
     content = f"> [!todo] Planned\n> {what} comes later in the course : its content will be written here when its turn comes. What it covers is in its properties."
     return blocks.ensure_notes(blocks.render(PLACEHOLDER_BLOCK, content))
 

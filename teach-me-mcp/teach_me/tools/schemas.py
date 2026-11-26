@@ -15,7 +15,8 @@ STRICT = ConfigDict(use_attribute_docstrings=True, extra="forbid")
 
 Grade = Literal["A", "B", "C", "D", "E"]
 QuestionKind = Literal["open", "single", "multiple"]
-StepKind = Literal["class", "quiz", "project"]
+StepKind = Literal["class", "quiz", "deliverable"]
+Difficulty = Literal["guided", "standard", "autonomous"]
 Importance = Literal["core", "optional"]
 CourseStatus = Literal["active", "finished", "abandoned"]
 ClassStatus = Literal["new", "read"]
@@ -105,11 +106,33 @@ class QuestionGrade(TypedDict):
 
 
 @with_config(DOCUMENTED)
+class Milestone(TypedDict):
+    """A milestone of a deliverable : a big piece of the project, built by the student on their own over one or more sessions."""
+
+    title: str
+    """A short title, e.g. 'A first CNN that trains'"""
+    text: str
+    """What to build, in markdown : the context, the expected work and the format of the result. Never a copy/pastable answer"""
+    skills: list[str]
+    """The slugs of the skills it evaluates, among the skills of the course. Its grade counts for each of them"""
+    format: str
+    """The format of the result, e.g. 'code', 'diagram', 'report', 'video'. Vary it from one milestone to the next"""
+    criteria: list[str]
+    """The checklist the student checks their work against while they work alone, shown in the note, e.g. 'The training loss decreases'"""
+    expected_outcome: str
+    """What a great result contains, piece by piece, used to give feedback and to grade it. Hidden from the student"""
+    target_session: int
+    """The check-in by which it should be done, from 1 to `max_sessions`"""
+    hints: NotRequired[list[str]]
+    """Hints from the lightest to the strongest, to unlock the student without giving the answer. Hidden : you give them at a check-in, when needed"""
+
+
+@with_config(DOCUMENTED)
 class PlannedStep(TypedDict):
-    """A step of the plan of a course : a class or an exam to come. The server gives it a slug : pass it as `planned` to save_class or create_exam when the time comes."""
+    """A step of the plan of a course : a class, a quiz or a deliverable to come. The server gives it a slug : pass it as `planned` to save_class, create_exam or create_deliverable when the time comes."""
 
     kind: StepKind
-    """class : a class (save_class). quiz : a quick check of knowledge. project : an exercise on the student's project (create_exam)"""
+    """class : a class (save_class). quiz : a quick check of knowledge (create_exam). deliverable : milestones of a project, built by the student over several sessions (create_deliverable)"""
     title: str
     """The title of the class or exam, e.g. 'Convolution by hand'"""
     description: str
