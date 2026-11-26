@@ -18,6 +18,7 @@ from teach_me.tools import (
     log_session,
     save_class,
     start_session,
+    update_class,
     update_project,
 )
 
@@ -102,11 +103,16 @@ def test_save_class(course, vault):
     assert saved == {"slug": "convolution", "path": "courses/computer-vision/classes/class-convolution.md", "warnings": []}
     document = vault_io.read(vault / saved["path"])
     assert document.metadata["title"] == "Convolution" and document.metadata["description"] == "Definition and kernels"
-    assert document.metadata["status"] == "done" and document.metadata["order"] == 1 and document.metadata["started_at"]
+    assert document.metadata["status"] == "new" and document.metadata["order"] == 1 and document.metadata["started_at"]
     assert document.metadata["skills"] == ["[[skill-convolution]]"]  # from the plan
     assert document.body == "# Convolution\n\nContent"
     assert "Class [[class-convolution|Convolution]]" in get_course_state(course)["sessions"][0]["entries"]
-    assert get_course_state(course)["plan"]["done"] == 1
+    state = get_course_state(course)
+    assert state["plan"]["done"] == 0 and state["classes_to_read"][0]["slug"] == "convolution"  # not read yet
+    assert "convolution" not in [step["slug"] for step in state["plan"]["next_steps"]]
+    assert update_class(course, "convolution", "read") == "convolution"
+    state = get_course_state(course)
+    assert state["plan"]["done"] == 1 and state["classes_to_read"] == []
 
 
 def test_same_class_title_gets_a_new_slug(course):

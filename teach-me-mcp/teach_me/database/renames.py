@@ -145,14 +145,18 @@ def _put_back(document: Document, target: Path) -> str:
     if path != target:
         _rename(path, target)
     change = f"{before} → {vault.relative(target)}"
-    if document.path.stem != target.stem:
-        relinked = relink(document.path.stem, target.stem)
+    old, new = document.path.stem, target.stem
+    if old != new:
+        relinked = relink(old, new)
+        kept = old.casefold() != new.casefold()  # Obsidian ignores the case of a name : no alias for a change of case only
         restored = vault.read(target)
         aliases = objects.as_list(restored.metadata.get("aliases"))
-        if document.path.stem not in aliases:
-            restored.metadata["aliases"] = [*aliases, document.path.stem]
+        if kept and old not in aliases:
+            restored.metadata["aliases"] = [*aliases, old]
             vault.write(restored)
-        change += f" (the name '{document.path.stem}' kept as an alias" + (f", links fixed in {len(relinked)} note(s))" if relinked else ")")
+        details = ([f"the name '{old}' kept as an alias"] if kept else []) + ([f"links fixed in {len(relinked)} note(s)"] if relinked else [])
+        if details:
+            change += f" ({', '.join(details)})"
     return change
 
 

@@ -37,7 +37,7 @@ formulas:
   project: 'file.asLink(name)'
   where: 'if(url, url, file)'
   kind: 'if(type == "class", "📖 class", if(type == "quiz", "❓ quiz", "🛠️ project"))'
-  progress: 'if(status == "done" || status == "corrected", "✅ done", if(status == "planned", "⏳ planned", "✍️ " + status))'
+  progress: 'if(status == "read" || status == "done" || status == "corrected", "✅ done", if(status == "planned", "⏳ planned", if(status == "new", "📖 to read", "✍️ " + status)))'
 summaries:
   Evaluated: 'values.filter(value).mean().round(2)'
 properties:
@@ -109,6 +109,7 @@ views:
 {_STEPS_FILTER}
         - or:
             - 'status == "planned"'
+            - 'status == "new"'
             - 'status == "assigned"'
             - 'status == "filled"'
     sort:
@@ -119,7 +120,7 @@ views:
       - formula.step
       - formula.kind
       - description
-      - formula.progress
+      - status
   - type: table
     name: Last steps
     limit: 3
@@ -323,6 +324,20 @@ views:
       - status
       - started_at
   - type: table
+    name: Classes to read
+    filters:
+      and:
+        - 'type == "class"'
+        - 'status == "new"'
+    sort:
+      - property: started_at
+        direction: ASC
+    order:
+      - formula.name
+      - course
+      - status
+      - started_at
+  - type: table
     name: Last steps
     limit: 5
     filters:
@@ -391,6 +406,8 @@ Next steps :
 
 ![[course.base#Next steps]]
 
+A class stays *new* until you read it : then set its status to *read*, here or in its note.
+
 ## 🗺️ Plan
 
 ![[course.base#Plan]]
@@ -436,6 +453,10 @@ HOME_DASHBOARD = """# 🏠 Home
 ## Exams to answer
 
 ![[home.base#Exams to answer]]
+
+## Classes to read
+
+![[home.base#Classes to read]]
 
 ## Last steps
 

@@ -60,7 +60,7 @@ def test_a_document_outside_the_plan_is_added_with_a_warning(course, vault):
     steps = plans.course_plan(objects.get_course(course))
     assert [step["slug"] for step in steps][:3] == ["convolution", "padding", "convolution-quiz"]  # after the last step done
     padding = note(vault, "class-padding").metadata
-    assert padding["added"] is True and padding["order"] == 2 and padding["status"] == "done"
+    assert padding["added"] is True and padding["order"] == 2 and padding["status"] == "new"
     assert note(vault, "quiz-convolution-quiz").metadata["order"] == 3
     exam = create_exam(course, "Surprise", "quiz", [QUESTION])
     assert "wasn't in the plan" in exam["warnings"][0]

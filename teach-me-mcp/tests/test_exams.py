@@ -73,7 +73,7 @@ def test_create_exam_renders_the_questions_and_hides_the_solutions(course, vault
     state = get_course_state(course)
     assert state["pending_exams"][0]["slug"] == "convolution-quiz"
     assert document.metadata["order"] == 2 and document.metadata["started_at"]
-    assert get_course_state(course)["plan"]["next_steps"][1]["progress"] == "in progress"
+    assert "convolution-quiz" not in [step["slug"] for step in state["plan"]["next_steps"]]  # in progress : in pending_exams
 
 
 def test_exam_slugs_are_unique_across_quizzes_and_project_exams(course, vault):

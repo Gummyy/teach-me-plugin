@@ -9,7 +9,8 @@ hold the plan, so that an Obsidian base shows it (see `dashboards.py`) :
     added : true (a document created outside the plan), suggested_resources (titles and URLs)
 
 A planned step has the status `planned` and a placeholder body. save_class and create_exam fill the
-note of their step : a class is then `done`, an exam `assigned`, `filled` and `corrected`. A step
+note of their step : a class is then `new`, and `read` once the student went through it, an exam
+`assigned`, `filled` and `corrected`. A step
 removed from the plan is deleted when nothing was written in it, and `dropped` otherwise.
 
 Inside the tools, a step is a dict : {"slug", "kind" : class | quiz | project, "title", "description",
@@ -28,7 +29,7 @@ STEP_KINDS = ("class", "quiz", "project")
 IMPORTANCES = ("core", "optional")
 COURSE_STATUSES = ("active", "finished", "abandoned")
 PROGRESS = ("planned", "in progress", "done")
-"""planned : nothing done yet. in progress : an exam waiting for answers or for its correction. done : a class saved, an exam corrected."""
+"""planned : nothing done yet. in progress : a class not read yet, an exam waiting for answers or for its correction. done : a class read, an exam corrected."""
 CLASSES_PER_EXAM = 3
 """The skill asks for at least one exam every 3 classes."""
 NEXT_STEPS = 3
@@ -95,7 +96,7 @@ def status_progress(kind: str, status: Optional[str]) -> str:
     if status in (PLANNED, None):
         return "planned"
     if kind == "class":
-        return "done"
+        return "done" if objects.class_is_read(status) else "in progress"
     return "done" if status == "corrected" else "in progress"
 
 

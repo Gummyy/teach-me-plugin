@@ -40,6 +40,14 @@ EXAM_COEFFICIENTS = {"quiz": 1, "project": 2}
 EXAM_NOTE_TYPES = {"quiz": "quiz", "project": "exercise"}
 """The `type` property of the note of each type of exam : a project exam is an exercise, 'project' is the type of the project notes."""
 RESOURCE_STATUSES = ("new", "seen", "discussed", "dropped")
+CLASS_STATUSES = ("new", "read")
+"""A class is new when save_class writes it, and read once the student went through it : they set it in Obsidian, or tell the teacher, who calls update_class."""
+READ = ("read", "done")
+"""The statuses of a class that was read : `done` was the status of every saved class before migration 5, and a student may still type it."""
+
+
+def class_is_read(status) -> bool:
+    return str(status or "").strip().lower() in READ
 DOCUMENT_KINDS = ("classes", "exams")
 
 PREFIXES = {

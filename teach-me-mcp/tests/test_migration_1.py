@@ -63,9 +63,9 @@ def test_each_step_of_the_plan_is_a_note(migrated):
     assert "plan" not in course.metadata and "## Plan" not in course.body
     assert course.body.startswith("%% teach-me:dashboard start %%") and course.body.index("## ✏️ My notes") < course.body.index("- Course created")
     expected = [
-        ("classes/class-convolution.md", 1, "done", "Kernels and feature maps"),
+        ("classes/class-convolution.md", 1, "read", "Kernels and feature maps"),
         ("exams/quiz-convolution-quiz.md", 2, "corrected", ""),
-        ("classes/class-pooling.md", 3, "done", "Max pooling."),
+        ("classes/class-pooling.md", 3, "read", "Max pooling."),
         ("classes/class-cnn-architectures.md", 4, "planned", ""),
         ("exams/exercise-first-cnn.md", 5, "planned", "Train a CNN on the pictures"),
     ]

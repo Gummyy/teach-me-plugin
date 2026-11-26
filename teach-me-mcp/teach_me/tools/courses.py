@@ -334,8 +334,9 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
             "projects": [{"slug", "name", "description", "last_progress"}],
             "skills": [{"slug", "name", "description", "grade", "score"}], the grade coming from the exams of all the courses,
             "sessions": [{"session", "entries"}], the last sessions, most recent first,
-            "plan": {"done", "total", "next_steps"} : the number of steps done, and the next steps not done yet ({"slug", "kind", "title", "description", "skills", "importance", "progress"}) : pass the slug of the one you do as `planned` to save_class or create_exam. The whole plan is in the course note,
+            "plan": {"done", "total", "next_steps"} : the number of steps done, and the next steps not started yet ({"slug", "kind", "title", "description", "skills", "importance", "progress"}) : pass the slug of the one you do as `planned` to save_class or create_exam. The whole plan is in the course note,
             "pending_exams": exams whose status is "assigned" or "filled",
+            "classes_to_read": classes the student hasn't marked as read yet : [{"slug", "title", "path", "started_at"}]. Mark them with update_class once they went through them,
             "new_resources": shared resources the student hasn't looked at yet : [{"slug", "title", "url" or "file", "status", "session", "step"}],
             "resources_to_discuss": resources the student marked as seen or wrote notes about, in Obsidian : the same, with their "notes". Ask them what they thought, in one sentence, when the topic of the day allows it,
             "progress": {"classes_since_last_exam", "last_corrected_exam" ({"slug", "title", "mean", "shares"}), "advice"} : what to do next, computed from the classes and the exams,
@@ -357,7 +358,7 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         if objects.exam_status(exam) in ("assigned", "filled")
     ]
     steps = plans.with_progress(course, plans.course_plan(document))
-    upcoming = [step for step in steps if step["progress"] != "done"]
+    upcoming = [step for step in steps if step["progress"] == "planned"]  # the steps in progress are in pending_exams and classes_to_read
     resources = [shared.summary(document) for document in objects.iter_resources(course)]
     to_discuss = [resource for resource in resources if resource["status"] == "seen" or (resource["status"] == "new" and resource.get("notes"))]
     return {
@@ -366,11 +367,16 @@ def get_course_state(course: str, last_sessions: int = 3) -> dict:
         "status": metadata.get("status") or "active",
         "subject": metadata.get("subject"),
         "starting_level": metadata.get("starting_level"),
-        "plan": {"done": len(steps) - len(upcoming), "total": len(steps), "next_steps": upcoming[: plans.NEXT_STEPS]},
+        "plan": {"done": sum(step["progress"] == "done" for step in steps), "total": len(steps), "next_steps": upcoming[: plans.NEXT_STEPS]},
         "projects": [project_summary(project) for project in objects.course_projects(document) if objects.linked_note("project", project, objects.project_file(project))],
         "skills": skills,
         "sessions": [{"session": label, "entries": entries} for label, entries in sessions],
         "pending_exams": pending,
+        "classes_to_read": [
+            {"slug": objects.slug(lesson), "title": lesson.metadata.get("title"), "path": vault.relative(lesson.path), "started_at": lesson.metadata.get("started_at")}
+            for lesson in objects.iter_documents(course, "classes")
+            if not objects.class_is_read(lesson.metadata.get("status"))
+        ],
         "new_resources": [resource for resource in resources if resource["status"] == "new" and not resource.get("notes")],
         "resources_to_discuss": to_discuss,
         "progress": _progress(course),

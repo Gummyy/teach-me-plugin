@@ -7,6 +7,7 @@ from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.courses import get_course_state, list_courses
+from teach_me.tools.schemas import ClassStatus
 from teach_me.tools.users import Interface, INTERFACES, get_user, list_users
 
 
@@ -62,10 +63,13 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
         objects.render_project(project)
     state = get_course_state(course)
     steps = [" ".join(state["progress"]["advice"]) or "Continue the course where the last session stopped."]
+    if state["classes_to_read"]:
+        titles = ", ".join(f"'{lesson['title']}'" for lesson in state["classes_to_read"])
+        steps.append(f"The student hasn't marked as read the classes {titles} : ask them in one sentence whether they went through them, and call update_class with \"read\" for those they did. Never insist.")
     upcoming = state["plan"]["next_steps"]
     if upcoming:
         steps.append(f"Next step of the plan : the {upcoming[0]['kind']} '{upcoming[0]['title']}' : pass planned=\"{upcoming[0]['slug']}\" to save_class or create_exam.")
-    else:
+    elif state["plan"]["done"] == state["plan"]["total"]:
         steps.append("Every step of the plan is done : propose new steps (edit_course `add_steps`), or mark the course finished (edit_course `status`).")
     if state["status"] != "active":
         steps.insert(0, f"This course is {state['status']} : ask the student whether they want to resume it (edit_course status=\"active\").")
@@ -94,7 +98,7 @@ def log_session(course: str, entry: str) -> str:
 
 
 def save_class(course: str, title: str, summary: str, content: str, planned: Optional[str] = None) -> dict:
-    """Saves the content of a class, before presenting it.
+    """Saves the content of a class, before presenting it. The class is "new" until the student went through it : then call update_class with "read".
 
     Args:
         course (str): The slug of the course
@@ -121,7 +125,7 @@ def save_class(course: str, title: str, summary: str, content: str, planned: Opt
     path = objects.step_file(course, step)
     label = objects.current_session(course_document)
     moment = vault.format_time(vault.now())
-    metadata = {"title": title.strip(), "status": "done", "session": label, "started_at": moment, "updated_at": moment}
+    metadata = {"title": title.strip(), "status": "new", "session": label, "started_at": moment, "updated_at": moment}
     if (summary or "").strip():
         metadata["description"] = summary.strip()
     plans.fill(path, metadata, content)
@@ -130,3 +134,33 @@ def save_class(course: str, title: str, summary: str, content: str, planned: Opt
     dashboards.render_course(course_document)
     vault.write(course_document)
     return {"slug": step["slug"], "path": vault.relative(path), "warnings": warnings}
+
+
+def update_class(course: str, slug: str, status: ClassStatus) -> str:
+    """Updates the status of a class : "read" once the student went through it (in the chat or in their vault), "new" when they want to read it again. save_class writes a class as "new". The student can also change it in Obsidian : get_course_state returns the classes still to read.
+
+    Args:
+        course (str): The slug of the course
+        slug (str): The slug of the class, as returned by save_class or get_course_state
+        status (ClassStatus): The new status
+
+    Returns:
+        str: The slug of the class
+    """
+    if status not in objects.CLASS_STATUSES:
+        raise ToolError(f"Unknown status '{status}'. Use one of : {', '.join(objects.CLASS_STATUSES)}.")
+    document = objects.get_course(course)
+    path = objects.step_file(course, {"kind": "class", "slug": slug})
+    if not path.is_file():
+        known = ", ".join(objects.slug(lesson) for lesson in objects.iter_documents(course, "classes"))
+        raise ToolError(f"Unknown class '{slug}' in the course '{course}'. Classes given : {known or 'none'}. Use the slug returned by save_class.")
+    lesson = vault.read(path)
+    if lesson.metadata.get("status") in (plans.PLANNED, plans.DROPPED):
+        raise ToolError(f"The class '{slug}' is {lesson.metadata.get('status')} : it has no content yet. Write it first with save_class (planned=\"{slug}\").")
+    if lesson.metadata.get("status") != status:
+        lesson.metadata["status"] = status
+        lesson.metadata["updated_at"] = vault.format_time(vault.now())
+        vault.write(lesson)
+    objects.current_session(document)
+    vault.write(document)
+    return slug

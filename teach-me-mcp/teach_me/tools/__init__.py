@@ -11,7 +11,7 @@ from teach_me.tools.project import create_project, list_projects, update_project
 from teach_me.tools.repair import migrate_vault, repair_note
 from teach_me.tools.report import report_card
 from teach_me.tools.resources import share_resource, update_resource
-from teach_me.tools.sessions import log_session, save_class, start_session
+from teach_me.tools.sessions import log_session, save_class, start_session, update_class
 from teach_me.tools.skill import create_skills, edit_skill, list_skills
 from teach_me.tools.users import create_user, edit_user, get_user, list_users
 
@@ -33,6 +33,7 @@ ALL_TOOLS = [
     get_course_state,
     log_session,
     save_class,
+    update_class,
     create_exam,
     submit_answers,
     read_exam,

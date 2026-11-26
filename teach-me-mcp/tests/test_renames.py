@@ -111,3 +111,11 @@ def test_migration_4_gives_every_note_an_id(course, vault):
     assert result["to"] == migrations.current_version()
     assert all(vault_io.read(path).metadata["id"] == path.stem for path in notes)
     assert len([change for change in result["changes"] if change.endswith(": id")]) == len(notes)
+
+
+def test_a_change_of_case_is_put_back_without_an_alias(course, vault):
+    skill = objects.skill_file("convolution")
+    skill.rename(skill.with_name("Skill-convolution.md"))
+    result = start("terminal", "alice", course)
+    assert [path.name for path in vault.glob("skills/*onvolution.md")] == ["skill-convolution.md"]
+    assert "aliases" not in vault_io.read(skill).metadata and "alias" not in _warnings(result)

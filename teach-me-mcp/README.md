@@ -25,7 +25,7 @@ The hidden data of an exam (`.teach-me/exams/<exam>.json` : its type, questions,
 
 The tools write some parts of a note themselves, between `%% teach-me:<name> start %%` and `%% teach-me:<name> end <hash> %%` (hidden in reading view), and rewrite them when their data changes. The rest of the note belongs to the student. When the student edited a generated part, their version moves to the `## ✏️ My notes` section of the note before the part is rewritten.
 
-Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps file names unique in the vault, so every link points to exactly one note. The tools only take slugs, without the prefix. Dates live in the frontmatter (`created_at`, and `started_at` once a step was given). Each step of the plan of a course is a note from the moment it is planned : its `order`, `status` (`planned`, then `done` for a class, `assigned`, `filled`, `corrected` for an exam), `description`, `skills` and `importance` are its properties, and `bases/course.base` shows them in the course note.
+Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps file names unique in the vault, so every link points to exactly one note. The tools only take slugs, without the prefix. Dates live in the frontmatter (`created_at`, and `started_at` once a step was given). Each step of the plan of a course is a note from the moment it is planned : its `order`, `status` (`planned`, then `new` and `read` for a class, `assigned`, `filled`, `corrected` for an exam), `description`, `skills` and `importance` are its properties, and `bases/course.base` shows them in the course note.
 
 A note broken by hand never stops the tools : the lists and views skip a note they can't read, a list property typed as a single text is read as a list of one, and a link to a deleted note is kept as it is. The tools then work without it, and add what they skipped to their result as `vault_warnings`, for the model to fix. Only a tool asked for that very note fails, with the way to repair it.
 
@@ -40,7 +40,7 @@ The vault path is read from the `TEACH_ME_VAULT` environment variable (a relativ
 | Path                           | Content                                                                |
 | ------------------------------ | ---------------------------------------------------------------------- |
 | `teach_me/server.py`           | The FastMCP server : registers the tools. `main()` is the `teach-me-mcp` command |
-| `teach_me/tools/`              | The 27 tools, as plain functions (docstrings are what the model reads), run one at a time under the lock of the vault |
+| `teach_me/tools/`              | The 28 tools, as plain functions (docstrings are what the model reads), run one at a time under the lock of the vault |
 | `teach_me/database/vault.py`   | Markdown files, frontmatter, slugs, checked links, time                |
 | `teach_me/database/objects.py` | Where each object lives in the vault, course content, session log, skill grades |
 | `teach_me/database/blocks.py`  | The parts of a note the tools generate, and the student's "My notes" section where their edits of a generated part move |

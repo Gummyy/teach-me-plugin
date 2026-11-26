@@ -18,6 +18,7 @@ QuestionKind = Literal["open", "single", "multiple"]
 StepKind = Literal["class", "quiz", "project"]
 Importance = Literal["core", "optional"]
 CourseStatus = Literal["active", "finished", "abandoned"]
+ClassStatus = Literal["new", "read"]
 
 
 @with_config(STRICT)
