@@ -9,7 +9,7 @@
     {
       "name": "teach-me",
       "source": "./",
-      "description": "A teacher that remembers you : classes, quizzes, project exercises and a report card, kept in your own Obsidian vault. And a teaching partner that prepares courses for your students."
+      "description": "A teacher that remembers you : classes, quizzes, project deliverables and a report card, kept in your own Obsidian vault. And a teaching partner that prepares courses for your students."
     }
   ]
 }

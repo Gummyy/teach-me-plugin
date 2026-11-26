@@ -65,7 +65,7 @@ Follow [the quiz guidelines](../../shared/exams.md#quizzes). The recall quiz tha
 
 ### Deliverables
 
-A deliverable is a milestone of the project, for a team, sized for the autonomy time before its deadline (usually 2-3 half days), and due at the start of an activity half day so the teacher can give feedback. The feedback to each team (~10-15 minutes) runs during that activity half day, one team at a time, while the other teams work on their own : plan an activity in teams, long enough for every team to get its turn. Follow [the project exam guidelines](../../shared/exams.md#project-exams). Vary the formats from one deliverable to the next (code, diagram, report, video, poster, ...). Say how each student's contribution shows, so that every student of the team is evaluated.
+A deliverable is a milestone of the project, for a team, sized for the autonomy time before its deadline (usually 2-3 half days), and due at the start of an activity half day so the teacher can give feedback. The feedback to each team (~10-15 minutes) runs during that activity half day, one team at a time, while the other teams work on their own : plan an activity in teams, long enough for every team to get its turn. Follow [the deliverable guidelines](../../shared/exams.md#deliverables) : the team feedback of the activity half day is the check-in of the deliverable. Vary the formats from one deliverable to the next (code, diagram, report, video, poster, ...). Say how each student's contribution shows, so that every student of the team is evaluated.
 
 ### Presentation
 

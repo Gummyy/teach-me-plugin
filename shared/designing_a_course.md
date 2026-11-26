@@ -37,12 +37,12 @@ Before validating the skills, ask yourself :
 
 ## Planning a course
 
-Think the course all the way through before writing any of it : the sequence of **every** step, from the first class to the last project exam. Each step has a kind, a title, a one or two sentences description, the skills it teaches or evaluates, an importance (`core` when the projects need it, `optional` for a side topic that can be skipped) and, when you already have some in mind, the external resources it will use.
+Think the course all the way through before writing any of it : the sequence of **every** step, from the first class to the last deliverable. Each step has a kind, a title, a one or two sentences description, the skills it teaches or evaluates, an importance (`core` when the projects need it, `optional` for a side topic that can be skipped) and, when you already have some in mind, the external resources it will use.
 
 A good plan :
 - evaluates every skill of the course in at least one exam, the most important ones several times,
 - has an exercise at least every 3 classes,
 - alternates presentations of the concepts and deep dives (explore widely, then describe thoroughly),
-- ends with project exams that build the milestones of the projects.
+- builds the projects with deliverables : the milestones of each project, started early enough to run alongside the classes, each sized to the time the students have to build it on their own.
 
 Present the plan as a short table and ask whether it matches what is expected : it is the cheapest moment to fix a misunderstanding, a topic already known or something missing. Even when nothing changes, the plan shows where the course is going.
