@@ -34,7 +34,7 @@ def test_every_note_has_a_type(migrated):
     assert note("projects/project-pet-classifier.md").metadata["type"] == "project"
     assert note("skills/skill-convolution.md").metadata["type"] == "skill"
     course = note("courses/computer-vision/course-computer-vision.md")
-    assert list(course.metadata)[0] == "type" and course.metadata["type"] == "course"
+    assert list(course.metadata)[:2] == ["id", "type"] and course.metadata["type"] == "course"
     lesson = note("courses/computer-vision/classes/class-convolution.md").metadata
     assert lesson["type"] == "class" and lesson["course"] == "[[course-computer-vision]]"
     exam = note("courses/computer-vision/exams/quiz-convolution-quiz.md")

@@ -94,7 +94,7 @@ def test_migration_3_gives_the_exams_their_type(course, vault):
     _set(path, "status", "assigned")
     (vault / ".teach-me" / "version").write_text("2\n")
     result = migrate_vault()
-    assert result["to"] == migrations.current_version() == 3
+    assert result["to"] == migrations.current_version()
     assert objects.exam_data(exam)["type"] == "project"
     assert vault_io.read(path).metadata["status"] == "corrected"
     assert any(change.endswith(": type") for change in result["changes"])

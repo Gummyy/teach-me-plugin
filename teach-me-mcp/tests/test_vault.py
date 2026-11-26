@@ -61,9 +61,9 @@ def test_write_and_read_round_trip(tmp_path: Path):
     path = tmp_path / "notes" / "note.md"
     vault.write(Document(path, {"title": "Été", "user": "[[alice]]", "tags": ["a", "b"]}, "# Body\n\nText"))
     text = path.read_text(encoding="utf-8")
-    assert text.startswith("---\ntitle: Été\n")  # keys keep their order, unicode isn't escaped
+    assert text.startswith("---\nid: note\ntitle: Été\n")  # a new note gets its id first, keys keep their order, unicode isn't escaped
     document = vault.read(path)
-    assert document.metadata == {"title": "Été", "user": "[[alice]]", "tags": ["a", "b"]}
+    assert document.metadata == {"id": "note", "title": "Été", "user": "[[alice]]", "tags": ["a", "b"]}
     assert document.body == "# Body\n\nText"
     assert document.slug == "note"
 
@@ -87,7 +87,7 @@ def test_write_refuses_a_file_changed_since_it_was_read(vault):
     fresh.metadata["a"] = 2
     vault_module.write(fresh)
     vault_module.write(fresh)  # the same document can be written twice
-    assert vault_module.read(path).metadata == {"a": 2}
+    assert vault_module.read(path).metadata == {"id": "note", "a": 2}
 
 
 def test_serialized_runs_again_when_nothing_was_written(vault):

@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from teach_me.database import dashboards, objects, vault
+from teach_me.database import dashboards, objects, renames, vault
 from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
@@ -26,6 +26,9 @@ def start_session(interface: Interface, user: Optional[str] = None, course: Opti
     if interface not in INTERFACES:
         raise ToolError(f"Unknown interface '{interface}'. Use one of : {', '.join(INTERFACES)}.")
     result: dict = {"interface": interface, "user": None, "preferences": {}, "courses": [], "course": None}
+    moved = renames.restore()  # first : the tools find the notes by their names
+    if moved:
+        vault.warn(f"Put back the notes the student renamed or moved in Obsidian, nothing to do : {'; '.join(moved)}.")
     if user is None:
         users = list_users()
         if not users:

@@ -9,7 +9,7 @@
     courses/<course>/exams/exercise-<exam>.md      (project exams)
     courses/<course>/resources/resource-<resource>.md
 
-Every note has a `type` property (user, project, skill, course, class, quiz, exercise, resource, or home for Home.md), and the
+Every note has an `id` property (its file name, see `renames.py`) and a `type` property (user, project, skill, course, class, quiz, exercise, resource, or home for Home.md), and the
 notes of a course a `course` property linking to it, so that Obsidian Bases can select them.
 
 Obsidian finds a note by its file name, wherever it is : the prefix of each kind keeps the file names
@@ -467,7 +467,8 @@ def link_or_name(kind: str, target: str, path: Path, alias: Optional[str] = None
         return link(kind, target, path, alias)
     vault.warn(
         f"The {kind} note {vault.relative(path)} is missing (deleted or renamed in Obsidian) : the tools kept working without it. "
-        f"Ask the student whether they renamed it (then rename it back) ; otherwise create it again or remove it from the course with edit_course."
+        "start_session puts back a note renamed or moved in Obsidian : if it is still missing after start_session, it was deleted (or renamed before it had an `id`). "
+        "Ask the student, then rename it back, create it again, or remove it from the course with edit_course."
     )
     return f"[[{path.stem}|{alias}]]" if alias else f"[[{path.stem}]]"
 
@@ -575,7 +576,7 @@ def iter_exams(course: str) -> Iterator[Document]:
 
 INTERFACES = ("terminal", "app")
 """The interfaces a user has preferences for."""
-USER_PROPERTIES = ("type", "name", "created_at", "updated_at", "known_skills")
+USER_PROPERTIES = ("id", "type", "name", "aliases", "created_at", "updated_at", "known_skills")
 """The properties of a user note that aren't preferences."""
 SKILL_SEPARATOR = " : "
 """Between the name and the description of a known skill : `known_skills` is a list of texts, e.g. "python : numpy and pandas"."""

@@ -19,10 +19,10 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
-from teach_me.database import migration_1, migration_2, migration_3, vault
+from teach_me.database import migration_1, migration_2, migration_3, migration_4, vault
 from teach_me.errors import ToolError
 
-MIGRATIONS: list[Callable[[], list[str]]] = [migration_1.run, migration_2.run, migration_3.run]
+MIGRATIONS: list[Callable[[], list[str]]] = [migration_1.run, migration_2.run, migration_3.run, migration_4.run]
 """MIGRATIONS[n] brings a vault from version n to version n + 1, and returns what it changed."""
 DATA_FOLDERS = ("users", "projects", "skills", "courses")
 """The folders of the notes written by the tools : a vault holding one of them was written by teach-me."""

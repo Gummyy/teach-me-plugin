@@ -97,7 +97,7 @@ def test_the_user_note_is_flat(vault):
     create_user("Alice", {"language": "english", "other": {"pace": "slow"}}, interface_preferences={"terminal": {"quizzes": "vault"}})
     edit_user("alice", add_known_skills=[{"name": "python", "description": "numpy and pandas"}, {"name": "sql", "description": ""}])
     metadata = vault_io.read(vault / "users" / "user-alice.md").metadata
-    assert list(metadata) == ["type", "name", "created_at", "language", "pace", "terminal_quizzes", "known_skills"]
+    assert list(metadata) == ["id", "type", "name", "created_at", "language", "pace", "terminal_quizzes", "known_skills"]
     assert metadata["known_skills"] == ["python : numpy and pandas", "sql"]
     for name in ("name", "app_emojis"):
         with pytest.raises(ToolError, match="can't be the name of a preference"):

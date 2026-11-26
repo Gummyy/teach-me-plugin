@@ -279,13 +279,16 @@ def write_json(path: Path, data: Any) -> None:
 
 
 def write(document: Document) -> None:
-    """Writes a document atomically, so that a crash never leaves a half written file.
+    """Writes a document atomically, so that a crash never leaves a half written file. A new note gets an `id` property,
+    its file name : the tools find it again under that name if the student renames it.
 
     Raises:
         ConflictError: when the file changed since the document was read
     """
     if document.mtime_ns is not None and document.path.is_file() and document.path.stat().st_mtime_ns != document.mtime_ns:
         raise ConflictError(document.path)
+    if document.mtime_ns is None and not document.path.is_file() and "id" not in document.metadata:
+        document.metadata = {"id": document.path.stem, **document.metadata}  # a new note : its stable id, see `renames.py`
     frontmatter = yaml.safe_dump(
         document.metadata, sort_keys=False, allow_unicode=True, width=10_000
     ).strip()
