@@ -410,3 +410,18 @@ def test_start_session_points_to_create_deliverable(clock, course):
 
     edit_course(course, remove_steps=["convolution", "convolution-quiz", "cnn-architectures"])
     assert 'pass planned="first-cnn" to create_deliverable' in start_session("terminal", "alice", course)["next_step"]
+
+
+def test_a_healthy_deliverable_is_not_rewritten_and_a_hand_edit_is_restored(clock, course, vault):
+    from teach_me.tools import start_session
+
+    start = vault_io.reporting(start_session)
+    path = vault / _deliverable(course)["path"]
+    _checkin()
+    start("terminal", "alice", course)
+    assert "vault_warnings" not in start("terminal", "alice", course)
+    _write(vault, path, "status: in progress", "status: corrected")
+    _write(vault, path, "sessions: 1", "sessions: 3")
+    result = start("terminal", "alice", course)
+    assert any("Restored" in warning and "status, sessions" in warning for warning in result["vault_warnings"])
+    assert vault_io.read(path).metadata["status"] == "in progress"
