@@ -6,7 +6,7 @@ their docstrings and type hints become the descriptions and the input schemas th
 """
 
 from teach_me.tools.courses import create_course, edit_course, get_course_state, list_courses
-from teach_me.tools.deliverables import checkin_deliverable, create_deliverable, read_deliverable
+from teach_me.tools.deliverables import checkin_deliverable, correct_deliverable, create_deliverable, read_deliverable
 from teach_me.tools.exams import correct_exam, create_exam, grade_questions, read_exam, submit_answers
 from teach_me.tools.project import create_project, list_projects, update_project
 from teach_me.tools.repair import migrate_vault, repair_note
@@ -43,6 +43,7 @@ ALL_TOOLS = [
     create_deliverable,
     read_deliverable,
     checkin_deliverable,
+    correct_deliverable,
     share_resource,
     update_resource,
     report_card,

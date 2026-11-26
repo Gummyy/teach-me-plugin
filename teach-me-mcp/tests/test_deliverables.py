@@ -6,8 +6,8 @@ import pytest
 from teach_me.database import objects
 from teach_me.database import vault as vault_io
 from teach_me.errors import ToolError
-from teach_me.tools import checkin_deliverable, create_deliverable, get_course_state, read_deliverable, read_exam
-from tests.test_exams import _create
+from teach_me.tools import checkin_deliverable, correct_deliverable, create_deliverable, get_course_state, read_deliverable, read_exam, report_card
+from tests.test_exams import GRADES, _correct, _create, _grades
 
 DATASET = {
     "title": "A dataset of pets",
@@ -265,3 +265,78 @@ def test_a_checkin_goes_before_my_notes_and_after_the_other_checkins():
     twice = deliverable.add_checkin(once, "### Check-in 2")
     assert twice.index("### Check-in 1") < twice.index("### Check-in 2") < twice.index("## ✏️ My notes")
     assert deliverable.parse_work(twice, 1)[0]["work"] == "Done."
+
+
+SHOWCASE = "A CNN that tells my cats from my dogs, 90 % accurate"
+
+
+def _grade(milestone, grade):
+    return {"milestone": milestone, "grade": grade, "explanation": f"Explanation {milestone}."}
+
+
+def test_correct_deliverable_grades_the_milestones_once(clock, course, vault):
+    path = vault / _deliverable(course)["path"]
+    _checkin()
+    result = correct_deliverable("first-cnn", [_grade(1, "A"), _grade(2, "B"), _grade(3, "abandoned")], SHOWCASE, {"convolution": "Clean dataset"})
+    assert result == {
+        "status": "corrected",
+        "grades": ["A", "B", "abandoned"],
+        "mean": 4.5,
+        "skills": {"convolution": {"grade": "A", "score": 5.0}, "cnn-architecture": {"grade": "B", "score": 4.0}},
+        "showcase": SHOWCASE,
+    }
+    document = vault_io.read(path)
+    assert (document.metadata["status"], document.metadata["mean"], document.metadata["showcase"]) == ("corrected", 4.5, SHOWCASE)
+    body = document.body
+    assert "## ✅ Correction (2026-11-26 14:00)\n\n**1** A, **1** B, **1** abandoned · mean **4.5/5**" in body
+    assert f"> [!example] 🎓 For your resume\n> {SHOWCASE}" in body
+    assert "> [!Abstract] Milestone 3 · A report on the results : abandoned, not graded" in body and REPORT["expected_outcome"] in body
+    assert "| Grade |" in body and "| 2 | A CNN that trains | check-in 2 | ⏳ to do | B |" in body and "**Next goal :**" not in body
+    assert body.index("## 📅 Check-ins") < body.index("## ✅ Correction")
+    assert _grades("alice") == {"convolution": {"grade": "A", "score": 5.0, "history": ["A"]}, "cnn-architecture": {"grade": "B", "score": 4.0, "history": ["B"]}}
+    assert "| Clean dataset |" in objects.skill_file("convolution").read_text(encoding="utf-8")
+    assert "Deliverable [[deliverable-first-cnn|First CNN]] corrected : 1 A, 1 B, 1 abandoned (mean 4.5/5)" in objects.get_course(course).body
+    assert f"Deliverable 'First CNN' corrected : {SHOWCASE}" in objects.get_project("pet-classifier").body
+    assert get_course_state(course)["plan"]["done"] == 1
+    assert f"| corrected | 4.5/5 | {SHOWCASE} |" in report_card(course)
+    with pytest.raises(ToolError, match="already corrected : a deliverable is graded once"):
+        correct_deliverable("first-cnn", [_grade(1, "A"), _grade(2, "B"), _grade(3, "A")], SHOWCASE)
+    with pytest.raises(ToolError, match="is corrected : it takes no more check-ins"):
+        _checkin()
+
+
+def test_half_of_the_milestones_abandoned_abandons_the_deliverable(clock, course, vault):
+    path = vault / _deliverable(course, milestones=[DATASET, NETWORK])["path"]
+    result = correct_deliverable("first-cnn", [_grade(1, "C"), _grade(2, "abandoned")])  # no showcase needed
+    assert result["status"] == "abandoned" and result["mean"] is None and result["grades"] == ["C", "abandoned"]
+    document = vault_io.read(path)
+    assert document.metadata["status"] == "abandoned" and document.metadata["mean"] is None
+    assert "the deliverable is **abandoned**" in document.body
+    assert _grades("alice") == {"convolution": {"grade": "C", "score": 2.0, "history": ["C"]}}  # the milestone built still counts
+    assert get_course_state(course)["plan"]["done"] == 1
+    assert "| abandoned | — |" in report_card(course)
+
+
+def test_a_milestone_weighs_three_questions_of_a_quiz(clock, course):
+    quiz = _create(course, planned="convolution-quiz")["slug"]
+    _correct(quiz, ["B", "A, B", "x"], GRADES)  # convolution : D and A
+    _deliverable(course, milestones=[DATASET])
+    correct_deliverable("first-cnn", [_grade(1, "A")], SHOWCASE)
+    assert _grades("alice")["convolution"] == {"grade": "B", "score": 4.2, "history": ["B", "A"]}  # (1 + 5 + 3 x 5) / 5, 3.67 if it weighed 1
+
+
+@pytest.mark.parametrize(
+    "grades, showcase, message",
+    [
+        ([_grade(1, "A"), _grade(2, "B")], SHOWCASE, "milestone\\(s\\) 3 have no grade"),
+        ([_grade(1, "A"), _grade(1, "B"), _grade(3, "A")], SHOWCASE, "graded twice"),
+        ([_grade(1, "E"), _grade(2, "B"), _grade(3, "A")], SHOWCASE, "needs a `grade` among : A, B, C, D, abandoned"),
+        ([{**_grade(1, "A"), "explanation": ""}, _grade(2, "B"), _grade(3, "A")], SHOWCASE, "has no `explanation`"),
+        ([_grade(1, "A"), _grade(2, "B"), _grade(3, "A")], None, "Give the `showcase`"),
+    ],
+)
+def test_correct_deliverable_checks_its_arguments(clock, course, grades, showcase, message):
+    _deliverable(course)
+    with pytest.raises(ToolError, match=message):
+        correct_deliverable("first-cnn", grades, showcase)
+    assert objects.exam_data("first-cnn")["corrected_at"] is None

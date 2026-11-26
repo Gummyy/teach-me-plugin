@@ -9,7 +9,7 @@ def _cell(value) -> str:
 
 
 def report_card(course: str) -> str:
-    """The report card of a course, from its skills and exams : skills of the course, grade and progression of each skill (from the exams of all the courses that evaluate it), list of the exams of the course. The course note shows it too, always up to date : no need to call this tool for the vault.
+    """The report card of a course, from its skills and exams : skills of the course, grade and progression of each skill (from the exams of all the courses that evaluate it), the deliverables with what the student built, list of the exams of the course. The course note shows it too, always up to date : no need to call this tool for the vault.
 
     Args:
         course (str): The slug of the course
@@ -39,8 +39,23 @@ def report_card(course: str) -> str:
             + (f"{grade['grade']} ({grade['score']}/5) | {' → '.join(grade['history'])} |" if grade else "— | not evaluated yet |")
         )
 
-    lines += ["", "## Exams", ""]
     exams = list(objects.iter_exams(course))
+    built = [exam for exam in exams if objects.is_deliverable(exam)]
+    if built:
+        lines += ["", "## Deliverables", "", "| Deliverable | Project | Status | Mean | What you built |", "| --- | --- | --- | --- | --- |"]
+        for exam in built:
+            link = objects.link("exam", objects.slug(exam), exam.path, alias=exam.metadata.get("title") or objects.slug(exam))
+            facts = objects.exam_facts(exam) or {}
+            shown = facts.get("shown") or {}
+            status = facts.get("status")
+            if status in objects.ACTIVE_DELIVERABLE:
+                status = f"{status} ({shown.get('sessions')}/{shown.get('max_sessions')} check-ins)"
+            mean = facts.get("mean")
+            lines.append(
+                f"| {_cell(link)} | {_cell(exam.metadata.get('project'))} | {_cell(status)} | {f'{mean}/5' if mean is not None else '—'} | {_cell(shown.get('showcase') or '')} |"
+            )
+
+    lines += ["", "## Exams", ""]
     if exams:
         lines += ["| Date | Exam | Type | Status |", "| --- | --- | --- | --- |"]
         for exam in exams:

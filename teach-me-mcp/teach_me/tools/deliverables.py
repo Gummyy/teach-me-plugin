@@ -8,13 +8,13 @@ The milestones are graded once, at the end. The check-ins give feedback, hints w
 
 from typing import Optional
 
-from teach_me.database import blocks, dashboards, objects, vault
+from teach_me.database import blocks, dashboards, objects, quiz, vault
 from teach_me.database import deliverable as deliverables
 from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.project import update_project
-from teach_me.tools.schemas import Difficulty, HintGiven, Milestone, MilestoneCheckin, Reschedule
+from teach_me.tools.schemas import Difficulty, HintGiven, Milestone, MilestoneCheckin, MilestoneGrade, Reschedule
 
 
 def _solutions_file(deliverable: str):
@@ -48,7 +48,7 @@ def active(course: str) -> list[Document]:
 
 def _roadmap(document: Document, data: dict) -> None:
     """The roadmap of a deliverable written again from its hidden data. The caller writes the note."""
-    content = deliverables.roadmap(data["questions"], data.get("next_goal"), deliverables.sessions_used(data), deliverables.budget(data))
+    content = deliverables.roadmap(data["questions"], data.get("next_goal"), deliverables.sessions_used(data), deliverables.budget(data), bool(data.get("corrected_at")))
     document.body = blocks.replace(document.body, deliverables.ROADMAP_BLOCK, content, vault.format_session(vault.now()))
 
 
@@ -330,3 +330,92 @@ def checkin_deliverable(
     else:
         step = f"Next check-in at the next session : {total - used} left. Between the sessions, the student works on their own : remind them of the next goals."
     return {"checkin": number, "status": facts["status"], "sessions": {"used": used, "total": total, "left": max(total - used, 0)}, "milestones_done": done, "next_step": step}
+
+
+def correct_deliverable(deliverable: str, grades: list[MilestoneGrade], showcase: Optional[str] = None, comments: Optional[dict[str, str]] = None) -> dict:
+    """Grades a deliverable, once every session of its budget is used or its work is done : call read_deliverable and look at the work first. It computes the grade of each skill from the milestones graded, and appends the correction to the note.
+
+    A milestone the student didn't work on is `abandoned` : no grade, it counts for no skill. When at least half of the milestones are abandoned, the deliverable is abandoned, without a mean. The hints given never lower a grade.
+
+    Args:
+        deliverable (str): The slug of the deliverable
+        grades (list[MilestoneGrade]): The grade of every milestone, each with its explanation
+        showcase (Optional[str]): What the student built, in one or two sentences they can put on their resume, written with them. Required unless the deliverable is abandoned. Defaults to None.
+        comments (Optional[dict[str, str]]): A short comment for each evaluated skill, by slug, shown in the correction and in the history of the skill. Defaults to None.
+
+    Returns:
+        dict: {"status", "grades", "mean", "skills", "showcase"} : "corrected" or "abandoned", the grade of each milestone ("abandoned" for those), the mean of the milestones graded (null when abandoned), the grade of each skill in this deliverable ({"grade", "score"}) and the showcase line
+    """
+    document = objects.find_document("exams", deliverable)
+    data = _data(document)
+    status = objects.exam_status(document)
+    if status not in objects.ACTIVE_DELIVERABLE:
+        raise ToolError(f"The deliverable '{deliverable}' is already {status} : a deliverable is graded once.")
+    questions = data["questions"]
+    given: dict[int, tuple[str, str]] = {}
+    for item in grades or []:
+        number = _milestone_number((item or {}).get("milestone"), len(questions), "A grade of `grades`")
+        if number in given:
+            raise ToolError(f"Milestone {number} is graded twice in `grades`.")
+        if item.get("grade") not in deliverables.MILESTONE_GRADES:
+            raise ToolError(f"Milestone {number} needs a `grade` among : {', '.join(deliverables.MILESTONE_GRADES)}.")
+        explanation = str(item.get("explanation") or "").strip()
+        if not explanation:
+            raise ToolError(f"The grade of milestone {number} has no `explanation`.")
+        vault.check_links(explanation, f"the explanation of milestone {number}")
+        given[number] = (item["grade"], explanation)
+    missing = [number for number in range(1, len(questions) + 1) if number not in given]
+    if missing:
+        raise ToolError(f"The milestone(s) {', '.join(map(str, missing))} have no grade : grade every milestone, `abandoned` for one the student didn't work on.")
+    for number, question in enumerate(questions, start=1):
+        grade = given[number][0]
+        if grade == deliverables.ABANDONED:
+            question["status"], question["grade"] = deliverables.ABANDONED, None
+        else:
+            question["grade"] = grade
+    abandoned = deliverables.is_abandoned(questions)
+    showcase = " ".join((showcase or "").split())
+    if not showcase and not abandoned:
+        raise ToolError("Give the `showcase` : what the student built, in one or two sentences they can put on their resume. Write it with them.")
+
+    graded = [question for question in questions if question.get("grade") in quiz.GRADES]
+    skills = quiz.skill_grades(graded, [question["grade"] for question in graded])
+    comments = comments or {}
+    unknown = [skill for skill in comments if skill not in skills]
+    if unknown:
+        raise ToolError(f"This deliverable doesn't evaluate : {', '.join(unknown)}. Evaluated skills : {', '.join(skills) or 'none'}.")
+    data["skills"] = {skill: {**grade, "comment": comments.get(skill)} for skill, grade in skills.items()}
+    moment = vault.now()
+    data["corrected_at"] = vault.format_time(moment)
+    data["showcase"] = showcase or None
+    objects.write_exam_data(deliverable, data)  # the source of truth first : the notes are only views of it
+
+    solutions = _solutions(deliverable, len(questions))
+    names = {skill: (note.metadata.get("name") if note else None) or skill for skill, note in ((skill, objects.linked_note("skill", skill, objects.skill_file(skill))) for skill in skills)}
+    skill_links = {skill: objects.link_or_name("skill", skill, objects.skill_file(skill), alias=names[skill]) for skill in skills}
+    explanations = [given[number][1] for number in range(1, len(questions) + 1)]
+    correction = deliverables.render_correction(vault.format_session(moment), questions, solutions, explanations, data["showcase"], data["skills"], skill_links)
+    _roadmap(document, data)
+    _show_facts(document)
+    document.body = f"{document.body.rstrip()}\n\n{correction}"
+    vault.write(document)
+    course_document = objects.get_course(objects.document_course(document))
+    objects.refresh_skills(objects.unlink(course_document.metadata.get("user", "")), skills)
+
+    facts = deliverables.facts(data)
+    title = str(document.metadata.get("title") or deliverable)
+    link = objects.link("exam", deliverable, document.path, alias=title)
+    counts = ", ".join(f"{sum(q.get('grade') == grade for q in questions)} {grade}" for grade in quiz.GRADES if any(q.get("grade") == grade for q in questions))
+    dropped = sum(q.get("status") == deliverables.ABANDONED for q in questions)
+    summary = ", ".join(part for part in (counts, f"{dropped} abandoned" if dropped else "") if part)
+    objects.append_to_session(course_document, f"Deliverable {link} {facts['status']} : {summary}" + (f" (mean {facts['mean']}/5)" if facts["mean"] is not None else ""))
+    dashboards.render_course(course_document)
+    vault.write(course_document)
+    _log_project(document, f"Deliverable '{title}' {facts['status']}" + (f" : {showcase}" if showcase else ""))
+    return {
+        "status": facts["status"],
+        "grades": [question.get("grade") or deliverables.ABANDONED for question in questions],
+        "mean": facts["mean"],
+        "skills": skills,
+        "showcase": data["showcase"],
+    }

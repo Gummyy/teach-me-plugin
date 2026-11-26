@@ -150,6 +150,25 @@ class HintGiven(TypedDict):
 
 
 @with_config(DOCUMENTED)
+class MilestoneGrade(TypedDict):
+    """The grade of a milestone, at the end of a deliverable.
+
+    A : the result meets every criterion and solves the problems the milestone raises (5).
+    B : it solves the main problems but misses some important aspects (4).
+    C : incomplete, it doesn't solve the main problem (2).
+    D : wrong, it doesn't do what the milestone asks (1).
+    abandoned : the student didn't work on it : no grade, it counts for no skill.
+    """
+
+    milestone: int
+    """The number of the milestone, starting at 1"""
+    grade: Literal["A", "B", "C", "D", "abandoned"]
+    """The grade of the result, whatever the hints given : a hint never lowers the grade"""
+    explanation: str
+    """What the student built well and what they missed, compared to the expected outcome, in markdown"""
+
+
+@with_config(DOCUMENTED)
 class Reschedule(TypedDict):
     """A milestone due by another check-in."""
 

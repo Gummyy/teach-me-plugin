@@ -184,12 +184,14 @@ def _cell(value) -> str:
     return " ".join(str(value if value is not None else "").replace("|", "\\|").split())
 
 
-def roadmap(milestones: list[dict], next_goal: Optional[str], used: int, total: int) -> str:
-    """The roadmap of a deliverable : each milestone, the check-in it is due by, its status, and the next goal."""
-    lines = ["## 🗺️ Roadmap", "", f"Check-ins : **{used}/{total}**", "", "| # | Milestone | Due by | Status |", "| --- | --- | --- | --- |"]
+def roadmap(milestones: list[dict], next_goal: Optional[str], used: int, total: int, corrected: bool = False) -> str:
+    """The roadmap of a deliverable : each milestone, the check-in it is due by, its status (its grade once corrected), and the next goal."""
+    lines = ["## 🗺️ Roadmap", "", f"Check-ins : **{used}/{total}**", ""]
+    lines += ["| # | Milestone | Due by | Status | Grade |", "| --- | --- | --- | --- | --- |"] if corrected else ["| # | Milestone | Due by | Status |", "| --- | --- | --- | --- |"]
     for number, milestone in enumerate(milestones, start=1):
-        lines.append(f"| {number} | {_cell(milestone['title'])} | check-in {milestone['target_session']} | {STATUS_ICONS.get(milestone.get('status'), _cell(milestone.get('status')))} |")
-    if next_goal:
+        row = f"| {number} | {_cell(milestone['title'])} | check-in {milestone['target_session']} | {STATUS_ICONS.get(milestone.get('status'), _cell(milestone.get('status')))} |"
+        lines.append(row + (f" {milestone.get('grade') or '—'} |" if corrected else ""))
+    if next_goal and not corrected:
         lines += ["", f"**Next goal :** {' '.join(next_goal.split())}"]
     return "\n".join(lines)
 
