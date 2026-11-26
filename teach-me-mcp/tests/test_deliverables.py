@@ -1,11 +1,12 @@
 import json
+from datetime import datetime, timedelta
 
 import pytest
 
 from teach_me.database import objects
 from teach_me.database import vault as vault_io
 from teach_me.errors import ToolError
-from teach_me.tools import create_deliverable, get_course_state, read_deliverable, read_exam
+from teach_me.tools import checkin_deliverable, create_deliverable, get_course_state, read_deliverable, read_exam
 from tests.test_exams import _create
 
 DATASET = {
@@ -38,6 +39,28 @@ REPORT = {
     "target_session": 3,
 }
 MILESTONES = [DATASET, NETWORK, REPORT]
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """The time of the tools, moved to the next session with `clock.next()`."""
+
+    class Clock:
+        moment = datetime(2026, 11, 26, 14, 0)
+
+        def next(self, hours=24):
+            self.moment += timedelta(hours=hours)
+
+    found = Clock()
+    monkeypatch.setattr(vault_io, "now", lambda: found.moment)
+    return found
+
+
+FEEDBACK = {"milestone": 1, "status": "in progress", "feedback": "Good start : 60 pictures of cats, the dogs are missing."}
+
+
+def _checkin(slug="first-cnn", milestones=(FEEDBACK,), next_goals="Finish the dataset.", **kwargs):
+    return checkin_deliverable(slug, "The folder of pictures.", list(milestones), next_goals, **kwargs)
 
 
 def _deliverable(course, milestones=MILESTONES, max_sessions=3, **kwargs):
@@ -150,3 +173,95 @@ def test_a_plan_without_deliverable_is_warned(course):
 
     created = create_course("alice", "Subject", "", ["convolution", "cnn-architecture"], plan=PLAN[:3], projects=["pet-classifier"], name="Other")
     assert "The plan has no deliverable" in created["warnings"][0]
+
+
+def test_a_checkin_gives_feedback_and_counts_a_session(clock, course, vault):
+    path = vault / _deliverable(course)["path"]
+    result = _checkin(hints=[{"milestone": 1, "hint": 2}])
+    assert result["checkin"] == 1 and result["status"] == "in progress"
+    assert result["sessions"] == {"used": 1, "total": 3, "left": 2} and result["milestones_done"] == 0
+    assert "Next check-in at the next session" in result["next_step"]
+    document = vault_io.read(path)
+    assert document.metadata["status"] == "in progress" and document.metadata["sessions"] == 1
+    assert document.metadata["next_goal"] == "Finish the dataset." and document.metadata["last_checkin"] == "2026-11-26T14:00"
+    body = document.body
+    assert "## 📅 Check-ins\n\n### Check-in 1 · 2026-11-26 14:00" in body and "**What you showed :** The folder of pictures." in body
+    assert "> [!note] Milestone 1 · A dataset of pets : 🔨 in progress\n> Good start" in body
+    assert f"> [!tip] Hint for milestone 1\n> {DATASET['hints'][1]}" in body  # the hint is written for the student
+    assert "| 1 | A dataset of pets | check-in 1 | 🔨 in progress |" in body and "**Next goal :** Finish the dataset." in body
+    assert body.index("## 🏁 Milestone 3") < body.index("## 📅 Check-ins")
+    assert read_deliverable("first-cnn")["milestones"][0]["hints"][1]["given"] is True
+    assert "Check-in 1/3 on the deliverable [[deliverable-first-cnn|First CNN]] : 0/3 milestones done, 1 hint(s) given" in objects.get_course(course).body
+    assert "Check-in 1 on 'First CNN' : 0/3 milestones done" in objects.get_project("pet-classifier").body
+
+
+def test_checkins_of_one_session_count_once(clock, course, vault):
+    _deliverable(course)
+    _checkin()
+    clock.next(hours=1)
+    again = _checkin(milestones=[{**FEEDBACK, "status": "done"}])
+    assert again["sessions"]["used"] == 1 and again["checkin"] == 1 and again["milestones_done"] == 1
+    clock.next()
+    assert _checkin(milestones=[{**FEEDBACK, "milestone": 2}])["sessions"]["used"] == 2
+    body = vault_io.read(vault / "courses/computer-vision/exams/deliverable-first-cnn.md").body
+    assert body.count("### Check-in 1 ·") == 2 and body.count("### Check-in 2 ·") == 1  # appended, never rewritten
+
+
+def test_the_last_session_submits_the_deliverable(clock, course, vault):
+    _deliverable(course, max_sessions=2, milestones=[DATASET, {**NETWORK, "target_session": 2}])
+    _checkin()
+    clock.next()
+    last = _checkin()
+    assert last["status"] == "submitted" and "grade it now with correct_deliverable" in last["next_step"] and "extend it once" in last["next_step"]
+    clock.next(hours=1)
+    assert _checkin()["status"] == "submitted"  # the same session : one more check-in is fine
+    clock.next()
+    with pytest.raises(ToolError, match="Every session of the deliverable 'first-cnn' is used"):
+        _checkin()
+    extended = _checkin(extend=1, reschedule=[{"milestone": 2, "target_session": 3}])
+    assert extended["status"] == "submitted" and extended["sessions"] == {"used": 3, "total": 3, "left": 0}
+    assert "It was already extended" in extended["next_step"]
+    body = vault_io.read(vault / "courses/computer-vision/exams/deliverable-first-cnn.md").body
+    assert "- 1 more session : up to 3 check-ins" in body and "- Milestone 2 · A CNN that trains : due by check-in 2 → 3" in body
+    clock.next()
+    with pytest.raises(ToolError, match="already extended once"):
+        _checkin(extend=1)
+
+
+def test_every_milestone_done_asks_for_the_grading(clock, course):
+    _deliverable(course, milestones=[DATASET])
+    result = _checkin(milestones=[{**FEEDBACK, "status": "done"}])
+    assert result["status"] == "in progress" and "Every milestone is done" in result["next_step"]
+
+
+@pytest.mark.parametrize(
+    "change, message",
+    [
+        ({"milestones": []}, "at least one milestone"),
+        ({"milestones": [{**FEEDBACK, "milestone": 4}]}, "from 1 to 3, not 4"),
+        ({"milestones": [FEEDBACK, FEEDBACK]}, "given twice"),
+        ({"milestones": [{**FEEDBACK, "status": "finished"}]}, "needs a `status`"),
+        ({"milestones": [{**FEEDBACK, "feedback": " "}]}, "has no `feedback`"),
+        ({"next_goals": ""}, "needs `shown`"),
+        ({"hints": [{"milestone": 1, "hint": 3}]}, "has 2 hint\\(s\\) : `hint` must be from 1 to 2"),
+        ({"hints": [{"milestone": 3, "hint": 1}]}, "Milestone 3 has no hint"),
+        ({"reschedule": [{"milestone": 1, "target_session": 4}]}, "Extend the deliverable"),
+        ({"extend": 4}, "from 1 to 3"),
+    ],
+)
+def test_checkin_checks_its_arguments(clock, course, change, message):
+    _deliverable(course)
+    with pytest.raises(ToolError, match=message):
+        _checkin(**change)
+    assert objects.exam_data("first-cnn")["checkins"] == []  # nothing written
+
+
+def test_a_checkin_goes_before_my_notes_and_after_the_other_checkins():
+    from teach_me.database import deliverable
+
+    body = "# T\n\n## 🏁 Milestone 1 · A\n\n**Your work :**\n\nDone.\n\n## ✏️ My notes\n\nMine."
+    once = deliverable.add_checkin(body, "### Check-in 1")
+    assert once == "# T\n\n## 🏁 Milestone 1 · A\n\n**Your work :**\n\nDone.\n\n## 📅 Check-ins\n\n### Check-in 1\n\n## ✏️ My notes\n\nMine."
+    twice = deliverable.add_checkin(once, "### Check-in 2")
+    assert twice.index("### Check-in 1") < twice.index("### Check-in 2") < twice.index("## ✏️ My notes")
+    assert deliverable.parse_work(twice, 1)[0]["work"] == "Done."

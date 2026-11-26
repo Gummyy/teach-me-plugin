@@ -128,6 +128,38 @@ class Milestone(TypedDict):
 
 
 @with_config(DOCUMENTED)
+class MilestoneCheckin(TypedDict):
+    """Where a milestone stands at a check-in, and your feedback on it."""
+
+    milestone: int
+    """The number of the milestone, starting at 1"""
+    status: Literal["to do", "in progress", "done"]
+    """done : every criterion is met, as far as you saw. in progress : started. to do : not started"""
+    feedback: str
+    """Comprehensive feedback on what the student showed, in markdown : what works, what to improve and how to check it, so that they improve before the grading at the end. Never a copy/pastable answer"""
+
+
+@with_config(DOCUMENTED)
+class HintGiven(TypedDict):
+    """A hidden hint of a milestone, given to the student at a check-in. A hint never lowers the grade."""
+
+    milestone: int
+    """The number of the milestone, starting at 1"""
+    hint: int
+    """The number of the hint, starting at 1, as read_deliverable returns them : give the lightest one that unlocks the student"""
+
+
+@with_config(DOCUMENTED)
+class Reschedule(TypedDict):
+    """A milestone due by another check-in."""
+
+    milestone: int
+    """The number of the milestone, starting at 1"""
+    target_session: int
+    """The check-in by which it should now be done"""
+
+
+@with_config(DOCUMENTED)
 class PlannedStep(TypedDict):
     """A step of the plan of a course : a class, a quiz or a deliverable to come. The server gives it a slug : pass it as `planned` to save_class, create_exam or create_deliverable when the time comes."""
 

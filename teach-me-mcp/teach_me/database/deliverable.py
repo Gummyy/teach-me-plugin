@@ -250,6 +250,18 @@ def render_checkin(number: int, label: str, shown: str, feedback: list[tuple[int
     return "\n\n".join(parts)
 
 
+def add_checkin(body: str, checkin: str) -> str:
+    """The body of a deliverable with a check-in appended to its "Check-ins" section, created before the correction and the "My notes" section."""
+    start = re.search(rf"^{re.escape(CHECKINS_HEADING)}[ \t]*$", body, re.MULTILINE)
+    if start is None:
+        stop = re.search(rf"^(?:## ✅ Correction|{re.escape(blocks.NOTES_HEADING)})", body, re.MULTILINE)
+        at = stop.start() if stop else len(body)
+        return f"{body[:at].rstrip()}\n\n{CHECKINS_HEADING}\n\n{checkin}\n" + (f"\n{body[at:]}" if body[at:].strip() else "")
+    following = re.search(r"^## ", body[start.end():], re.MULTILINE)
+    at = start.end() + following.start() if following else len(body)
+    return f"{body[:at].rstrip()}\n\n{checkin}\n" + (f"\n{body[at:]}" if body[at:].strip() else "")
+
+
 def render_correction(
     label: str, milestones: list[dict], solutions: list[dict], explanations: list[str], showcase: Optional[str], skills: dict[str, dict], skill_links: dict[str, str]
 ) -> str:

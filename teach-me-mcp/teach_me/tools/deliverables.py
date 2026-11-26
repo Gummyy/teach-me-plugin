@@ -8,13 +8,13 @@ The milestones are graded once, at the end. The check-ins give feedback, hints w
 
 from typing import Optional
 
-from teach_me.database import dashboards, objects, vault
+from teach_me.database import blocks, dashboards, objects, vault
 from teach_me.database import deliverable as deliverables
 from teach_me.database import plan as plans
 from teach_me.database.vault import Document
 from teach_me.errors import ToolError
 from teach_me.tools.project import update_project
-from teach_me.tools.schemas import Difficulty, Milestone
+from teach_me.tools.schemas import Difficulty, HintGiven, Milestone, MilestoneCheckin, Reschedule
 
 
 def _solutions_file(deliverable: str):
@@ -44,6 +44,18 @@ def _show_facts(document: Document) -> None:
 def active(course: str) -> list[Document]:
     """The deliverables of a course in progress : assigned, with check-ins, or waiting for their correction."""
     return [exam for exam in objects.iter_exams(course) if objects.is_deliverable(exam) and objects.exam_status(exam) in objects.ACTIVE_DELIVERABLE]
+
+
+def _roadmap(document: Document, data: dict) -> None:
+    """The roadmap of a deliverable written again from its hidden data. The caller writes the note."""
+    content = deliverables.roadmap(data["questions"], data.get("next_goal"), deliverables.sessions_used(data), deliverables.budget(data))
+    document.body = blocks.replace(document.body, deliverables.ROADMAP_BLOCK, content, vault.format_session(vault.now()))
+
+
+def _milestone_number(value, count: int, where: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= count:
+        raise ToolError(f"{where} : `milestone` must be the number of a milestone, from 1 to {count}, not {value!r}.")
+    return value
 
 
 def _log_project(document: Document, text: str) -> None:
@@ -200,3 +212,121 @@ def read_deliverable(deliverable: str) -> dict:
         "checkins": [{"checkin": number, "session": checkin.get("session"), "date": checkin.get("date")} for number, checkin in enumerate(data.get("checkins") or [], start=1)],
         "content": document.body,
     }
+
+
+def checkin_deliverable(
+    deliverable: str,
+    shown: str,
+    milestones: list[MilestoneCheckin],
+    next_goals: str,
+    hints: Optional[list[HintGiven]] = None,
+    reschedule: Optional[list[Reschedule]] = None,
+    extend: Optional[int] = None,
+) -> dict:
+    """Records a check-in on a deliverable, once the student showed their work at this session (their files, their repo, a demo : never take "it's done" as a proof). It appends your feedback to the note, the hints you give and the next goals, updates the roadmap, and logs it in the course and the project. Several check-ins in the same session count as one session. Nothing is graded : the milestones are graded at the end, with correct_deliverable.
+
+    Args:
+        deliverable (str): The slug of the deliverable
+        shown (str): 1-3 sentences : what the student showed you at this session
+        milestones (list[MilestoneCheckin]): Where each milestone the student worked on stands, with your feedback. Leave out the milestones not discussed
+        next_goals (str): What the student does before the next session, in 1-2 sentences : it shows in the roadmap and in Home.md
+        hints (Optional[list[HintGiven]]): The hidden hints you give, when the student is stuck : the tool writes them in the note. Hints never lower the grade. Defaults to None.
+        reschedule (Optional[list[Reschedule]]): Milestones now due by another check-in, e.g. when one turned out too big. Defaults to None.
+        extend (Optional[int]): More sessions for the deliverable, when the student needs more time and agrees : once at most, up to its `max_sessions`. Defaults to None.
+
+    Returns:
+        dict: {"checkin", "status", "sessions", "milestones_done", "next_step"} : the number of the check-in, the status of the deliverable, the sessions {"used", "total", "left"}, the milestones done, and what to do next
+    """
+    document = objects.find_document("exams", deliverable)
+    data = _data(document)
+    status = objects.exam_status(document)
+    if status not in objects.ACTIVE_DELIVERABLE:
+        raise ToolError(f"The deliverable '{deliverable}' is {status} : it takes no more check-ins.")
+    course_document = objects.get_course(objects.document_course(document))
+    label = objects.current_session(course_document)
+    checkins = data.setdefault("checkins", [])
+    same_session = bool(checkins) and checkins[-1].get("session") == label
+    changes = []
+    if extend is not None:
+        if data.get("extension"):
+            raise ToolError(f"The deliverable '{deliverable}' was already extended once, by {data['extension']} session(s) : grade what exists with correct_deliverable.")
+        if not isinstance(extend, int) or isinstance(extend, bool) or not 1 <= extend <= int(data.get("max_sessions") or 1):
+            raise ToolError(f"`extend` must be a number of sessions from 1 to {data.get('max_sessions')}, not {extend!r}.")
+        data["extension"] = extend
+        changes.append(f"{extend} more session{'s' if extend > 1 else ''} : up to {deliverables.budget(data)} check-ins")
+    elif status == "submitted" and not same_session:
+        raise ToolError(
+            f"Every session of the deliverable '{deliverable}' is used ({deliverables.budget(data)}). Grade what exists with correct_deliverable, "
+            "or, once at most and if the student agrees, give it more sessions with `extend`."
+        )
+    if not (shown or "").strip() or not (next_goals or "").strip():
+        raise ToolError("A check-in needs `shown` (what the student showed you) and `next_goals` (what they do before the next session).")
+    questions = data["questions"]
+    if not milestones:
+        raise ToolError("Give your feedback on at least one milestone in `milestones` : the ones the student worked on.")
+    feedback, seen = [], set()
+    for item in milestones:
+        number = _milestone_number((item or {}).get("milestone"), len(questions), "A milestone of `milestones`")
+        if number in seen:
+            raise ToolError(f"Milestone {number} is given twice in `milestones`.")
+        seen.add(number)
+        if item.get("status") not in deliverables.MILESTONE_STATUSES:
+            raise ToolError(f"Milestone {number} needs a `status` among : {', '.join(deliverables.MILESTONE_STATUSES)}.")
+        text = str(item.get("feedback") or "").strip()
+        if not text:
+            raise ToolError(f"Milestone {number} has no `feedback` : say what works and what to improve.")
+        vault.check_links(text, f"the feedback on milestone {number}")
+        feedback.append((number, item["status"], text))
+    solutions = _solutions(deliverable, len(questions))
+    given, hint_texts = [list(pair) for pair in data.get("hints_given") or []], []
+    for item in hints or []:
+        number = _milestone_number((item or {}).get("milestone"), len(questions), "A hint of `hints`")
+        available = solutions[number - 1].get("hints") or []
+        index = item.get("hint")
+        if not isinstance(index, int) or isinstance(index, bool) or not 1 <= index <= len(available):
+            raise ToolError(f"Milestone {number} has {len(available)} hint(s) : `hint` must be from 1 to {len(available)}, not {index!r}." if available else f"Milestone {number} has no hint.")
+        hint_texts.append((number, available[index - 1]))
+        if [number, index] not in given:
+            given.append([number, index])
+    for item in reschedule or []:
+        number = _milestone_number((item or {}).get("milestone"), len(questions), "A milestone of `reschedule`")
+        target = item.get("target_session")
+        if not isinstance(target, int) or isinstance(target, bool) or not 1 <= target <= deliverables.budget(data):
+            raise ToolError(f"Milestone {number} : `target_session` must be from 1 to {deliverables.budget(data)}, not {target!r}. Extend the deliverable with `extend` first.")
+        if target != questions[number - 1]["target_session"]:
+            changes.append(f"Milestone {number} · {questions[number - 1]['title']} : due by check-in {questions[number - 1]['target_session']} → {target}")
+            questions[number - 1]["target_session"] = target
+
+    for number, milestone_status, _ in feedback:
+        questions[number - 1]["status"] = milestone_status
+    moment = vault.format_time(vault.now())
+    checkins.append({"session": label, "date": moment, "milestones": {str(number): milestone_status for number, milestone_status, _ in feedback}})
+    data["hints_given"] = given
+    data["next_goal"] = " ".join(next_goals.split())
+    objects.write_exam_data(deliverable, data)  # the source of truth first
+
+    number = deliverables.sessions_used(data)
+    titles = [(n, questions[n - 1]["title"], milestone_status, text) for n, milestone_status, text in feedback]
+    document.body = deliverables.add_checkin(document.body, deliverables.render_checkin(number, label, shown, titles, hint_texts, changes, next_goals))
+    _roadmap(document, data)
+    _show_facts(document)
+    document.metadata["updated_at"] = moment
+    vault.write(document)
+
+    facts = deliverables.facts(data)
+    done, total, used = facts["shown"]["milestones_done"], deliverables.budget(data), facts["shown"]["sessions"]
+    link = objects.link("exam", deliverable, document.path, alias=str(document.metadata.get("title") or deliverable))
+    objects.append_to_session(course_document, f"Check-in {number}/{total} on the deliverable {link} : {done}/{len(questions)} milestones done" + (f", {len(hint_texts)} hint(s) given" if hint_texts else ""))
+    vault.write(course_document)
+    _log_project(document, f"Check-in {number} on '{document.metadata.get('title')}' : {done}/{len(questions)} milestones done")
+
+    if facts["status"] == "submitted":
+        step = (
+            "Every session of the deliverable is used : grade it now with correct_deliverable (call read_deliverable and look at the work first). "
+            + ("If the student needs more time and agrees, you can extend it once instead, with `extend`." if not data.get("extension") else "It was already extended : grade what exists.")
+        )
+    elif done == len(questions):
+        step = "Every milestone is done : grade the deliverable with correct_deliverable (call read_deliverable and look at the work first)."
+    else:
+        step = f"Next check-in at the next session : {total - used} left. Between the sessions, the student works on their own : remind them of the next goals."
+    return {"checkin": number, "status": facts["status"], "sessions": {"used": used, "total": total, "left": max(total - used, 0)}, "milestones_done": done, "next_step": step}
